@@ -2,19 +2,19 @@ package step
 
 import (
 	"bufio"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"io"
-	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
+	"github.com/bitrise-io/go-utils/v2/filedownloader"
 	"github.com/bitrise-io/go-utils/v2/log"
 	"github.com/bitrise-io/go-utils/v2/pathutil"
-	"github.com/hashicorp/go-retryablehttp"
 )
 
 const (
@@ -37,17 +37,17 @@ type unzipper interface {
 
 type installer struct {
 	logger      log.Logger
-	httpClient  *retryablehttp.Client
+	downloader  filedownloader.Downloader
 	unzipper    unzipper
 	pathChecker pathutil.PathChecker
 	baseURL     string
 	rootDir     string
 }
 
-func NewInstaller(logger log.Logger, httpClient *retryablehttp.Client, unzipper unzipper, pathChecker pathutil.PathChecker) Installer {
+func NewInstaller(logger log.Logger, downloader filedownloader.Downloader, unzipper unzipper, pathChecker pathutil.PathChecker) Installer {
 	return installer{
 		logger:      logger,
-		httpClient:  httpClient,
+		downloader:  downloader,
 		unzipper:    unzipper,
 		pathChecker: pathChecker,
 		baseURL:     defaultReleaseBaseURL,
@@ -112,21 +112,21 @@ func (i installer) Install(version string) (Installation, error) {
 }
 
 func (i installer) fetchChecksum(url string) (string, error) {
-	resp, err := i.get(url)
+	body, err := i.downloader.Get(context.Background(), url)
 	if err != nil {
 		return "", err
 	}
-	defer resp.Body.Close() //nolint:errcheck
+	defer body.Close() //nolint:errcheck
 
-	return parseChecksum(resp.Body, archiveName)
+	return parseChecksum(body, archiveName)
 }
 
 func (i installer) download(url, dst string) (string, error) {
-	resp, err := i.get(url)
+	body, err := i.downloader.Get(context.Background(), url)
 	if err != nil {
 		return "", err
 	}
-	defer resp.Body.Close() //nolint:errcheck
+	defer body.Close() //nolint:errcheck
 
 	f, err := os.Create(dst)
 	if err != nil {
@@ -135,22 +135,10 @@ func (i installer) download(url, dst string) (string, error) {
 	defer f.Close() //nolint:errcheck
 
 	hash := sha256.New()
-	if _, err := io.Copy(io.MultiWriter(f, hash), resp.Body); err != nil {
+	if _, err := io.Copy(io.MultiWriter(f, hash), body); err != nil {
 		return "", fmt.Errorf("download %s: %w", url, err)
 	}
 	return hex.EncodeToString(hash.Sum(nil)), nil
-}
-
-func (i installer) get(url string) (*http.Response, error) {
-	resp, err := i.httpClient.Get(url)
-	if err != nil {
-		return nil, fmt.Errorf("download %s: %w", url, err)
-	}
-	if resp.StatusCode != http.StatusOK {
-		resp.Body.Close() //nolint:errcheck
-		return nil, fmt.Errorf("download %s: unexpected status %s", url, resp.Status)
-	}
-	return resp, nil
 }
 
 func parseChecksum(r io.Reader, fileName string) (string, error) {

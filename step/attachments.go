@@ -4,11 +4,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/fs"
+	"maps"
 	"os"
 	"path"
 	"path/filepath"
-	"sort"
-	"strconv"
+	"slices"
 	"strings"
 
 	"github.com/bitrise-io/go-steputils/v2/testasset"
@@ -108,7 +108,7 @@ func attachableFiles(flowDir string) ([]string, error) {
 			return nil, err
 		}
 	}
-	sort.Strings(files)
+	slices.Sort(files)
 	return files, nil
 }
 
@@ -128,7 +128,7 @@ func linkAttachments(report *testreport.TestReport, bundles map[string]flowBundl
 	})
 
 	result := attachmentLinkResult{Linked: map[string]flowBundle{}}
-	for _, folder := range sortedKeys(bundles) {
+	for _, folder := range slices.Sorted(maps.Keys(bundles)) {
 		testCases := testCasesByFolder[folder]
 		switch {
 		case len(testCases) == 0:
@@ -156,18 +156,21 @@ func addAttachmentProperties(testCase *testreport.TestCase, folder string, files
 		testCase.Properties = &testreport.Properties{}
 	}
 
-	next := 0
+	used := map[string]bool{}
 	for _, property := range testCase.Properties.Property {
-		if suffix, ok := strings.CutPrefix(property.Name, attachmentPropertyPrefix); ok {
-			if n, err := strconv.Atoi(suffix); err == nil && n >= next {
-				next = n + 1
-			}
-		}
+		used[property.Name] = true
 	}
 
-	for i, file := range files {
+	n := 0
+	for _, file := range files {
+		name := fmt.Sprintf("%s%d", attachmentPropertyPrefix, n)
+		for used[name] {
+			n++
+			name = fmt.Sprintf("%s%d", attachmentPropertyPrefix, n)
+		}
+		used[name] = true
 		testCase.Properties.Property = append(testCase.Properties.Property, testreport.Property{
-			Name:  fmt.Sprintf("%s%d", attachmentPropertyPrefix, next+i),
+			Name:  name,
 			Value: path.Join(folder, filepath.ToSlash(file)),
 		})
 	}
@@ -186,13 +189,4 @@ func forEachTestCase(report *testreport.TestReport, fn func(*testreport.TestCase
 	for i := range report.TestSuites {
 		visit(&report.TestSuites[i])
 	}
-}
-
-func sortedKeys(bundles map[string]flowBundle) []string {
-	keys := make([]string, 0, len(bundles))
-	for key := range bundles {
-		keys = append(keys, key)
-	}
-	sort.Strings(keys)
-	return keys
 }

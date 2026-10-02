@@ -72,16 +72,3 @@ func installAppCommand(app App) (string, []string) {
 	}
 	return "xcrun", []string{"simctl", "install", "booted", app.Path}
 }
-
-func hasAndroidDevice(adbDevicesOutput string) bool {
-	for _, line := range strings.Split(adbDevicesOutput, "\n") {
-		if fields := strings.Fields(line); len(fields) >= 2 && fields[1] == "device" {
-			return true
-		}
-	}
-	return false
-}
-
-func hasBootedSimulator(simctlBootedOutput string) bool {
-	return strings.Contains(simctlBootedOutput, "(Booted)")
-}

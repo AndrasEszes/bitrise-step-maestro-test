@@ -19,10 +19,11 @@ func TestResolveMaestroVersion(t *testing.T) {
 		{name: "bundled version is not an override", input: bundledMaestroVersion, want: maestroVersion{Version: bundledMaestroVersion}},
 		{name: "newer version", input: "2.12.0", want: maestroVersion{Version: "2.12.0", Overridden: true}},
 		{name: "minimum version", input: "2.1.0", want: maestroVersion{Version: "2.1.0", Overridden: true}},
-		{name: "release tag prefix is accepted", input: " cli-2.10.0 ", want: maestroVersion{Version: "2.10.0", Overridden: true}},
+		{name: "surrounding whitespace is ignored", input: " 2.10.0 ", want: maestroVersion{Version: "2.10.0", Overridden: true}},
 		{name: "below minimum", input: "2.0.10", wantErr: "not supported"},
 		{name: "1.x", input: "1.41.0", wantErr: "not supported"},
 		{name: "invalid", input: "latest", wantErr: "invalid version"},
+		{name: "release tag form is invalid", input: "cli-2.10.0", wantErr: "invalid version"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

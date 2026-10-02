@@ -71,14 +71,3 @@ func TestInstallAppCommand(t *testing.T) {
 	assert.Equal(t, "xcrun", name)
 	assert.Equal(t, []string{"simctl", "install", "booted", "My.app"}, args)
 }
-
-func TestHasAndroidDevice(t *testing.T) {
-	assert.True(t, hasAndroidDevice("List of devices attached\nemulator-5554\tdevice\n"))
-	assert.False(t, hasAndroidDevice("List of devices attached\nemulator-5556\toffline\n"))
-	assert.False(t, hasAndroidDevice("List of devices attached\n"))
-}
-
-func TestHasBootedSimulator(t *testing.T) {
-	assert.True(t, hasBootedSimulator("== Devices ==\n-- iOS 26.4 --\n    iPhone 17 (0D6E2C4B-6F3A-4E8B-9C1D-2A3B4C5D6E7F) (Booted) \n"))
-	assert.False(t, hasBootedSimulator("== Devices ==\n"))
-}

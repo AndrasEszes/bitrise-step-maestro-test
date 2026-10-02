@@ -67,7 +67,7 @@ inputs:
       - Android: an `.apk`, for example the `$BITRISE_APK_PATH` output of **Android Build**
       - iOS: a simulator `.app`, for example the `$BITRISE_APP_DIR_PATH` output of **Xcode Build for Simulator**
 
-      Leave it empty if the app is already installed. When it is set, the Step also checks that a matching device is running.
+      Leave it empty if the app is already installed.
     is_required: false
 
 - include_tags: ""

@@ -3,8 +3,10 @@ package step
 import (
 	"encoding/xml"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 
 	"github.com/bitrise-io/go-android/v2/testresult/junitxml"
 	"github.com/bitrise-io/go-steputils/v2/stepconf"
@@ -133,10 +135,6 @@ func (s Step) InstallDependencies(config Config) (Installation, error) {
 }
 
 func (s Step) Run(config Config, installation Installation) (Result, error) {
-	if err := s.ensureDevice(config); err != nil {
-		return Result{}, err
-	}
-
 	if err := s.installApp(config); err != nil {
 		return Result{}, err
 	}
@@ -190,28 +188,6 @@ func (s Step) ExportOutputs(config Config, result Result) error {
 	return nil
 }
 
-func (s Step) ensureDevice(config Config) error {
-	switch config.App.Platform {
-	case PlatformAndroid:
-		out, err := s.commandFactory.Create("adb", []string{"devices"}, nil).RunAndReturnTrimmedCombinedOutput()
-		if err != nil {
-			return fmt.Errorf("list Android devices: %w", err)
-		}
-		if !hasAndroidDevice(out) {
-			return fmt.Errorf("no running Android emulator found; start one before this step (e.g. AVD Manager and Wait for Android emulator)")
-		}
-	case PlatformIOS:
-		out, err := s.commandFactory.Create("xcrun", []string{"simctl", "list", "devices", "booted"}, nil).RunAndReturnTrimmedCombinedOutput()
-		if err != nil {
-			return fmt.Errorf("list booted iOS simulators: %w", err)
-		}
-		if !hasBootedSimulator(out) {
-			return fmt.Errorf("no booted iOS simulator found; start one before this step (e.g. Xcode Start Simulator)")
-		}
-	}
-	return nil
-}
-
 func (s Step) installApp(config Config) error {
 	if config.App.Path == "" {
 		return nil
@@ -253,7 +229,7 @@ func (s Step) exportTestResults(config Config, result Result) {
 
 	testRunDir := filepath.Join(config.TestResultDir, config.TestName)
 	attached := 0
-	for _, folder := range sortedKeys(linked) {
+	for _, folder := range slices.Sorted(maps.Keys(linked)) {
 		bundle := linked[folder]
 		for _, file := range bundle.Files {
 			dst := filepath.Join(testRunDir, folder, file)

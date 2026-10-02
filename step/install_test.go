@@ -14,9 +14,9 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/bitrise-io/go-utils/v2/filedownloader"
 	"github.com/bitrise-io/go-utils/v2/log"
 	"github.com/bitrise-io/go-utils/v2/pathutil"
-	"github.com/bitrise-io/go-utils/v2/retryhttp"
 	"github.com/bitrise-io/go-utils/v2/ziputil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -67,12 +67,10 @@ func TestInstall_UnknownVersion(t *testing.T) {
 
 func testInstaller(t *testing.T, baseURL string) installer {
 	logger := log.NewLogger()
-	client := retryhttp.NewClient(logger)
-	client.RetryMax = 0
 	pathChecker := pathutil.NewPathChecker()
 	return installer{
 		logger:      logger,
-		httpClient:  client,
+		downloader:  filedownloader.NewDownloader(logger),
 		unzipper:    ziputil.NewZipManager(pathChecker),
 		pathChecker: pathChecker,
 		baseURL:     baseURL,

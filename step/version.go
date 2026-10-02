@@ -19,7 +19,7 @@ type maestroVersion struct {
 }
 
 func resolveMaestroVersion(input string) (maestroVersion, error) {
-	input = strings.TrimPrefix(strings.TrimSpace(input), "cli-")
+	input = strings.TrimSpace(input)
 	if input == "" {
 		return maestroVersion{Version: bundledMaestroVersion}, nil
 	}

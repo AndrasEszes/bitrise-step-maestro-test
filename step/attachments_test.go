@@ -117,20 +117,24 @@ func TestExportOutputs_NoBundlesExportsOriginalReport(t *testing.T) {
 	assert.Equal(t, maestroJUnitReport, string(exported))
 }
 
-func TestLinkAttachments_NumbersAfterExistingAttachments(t *testing.T) {
+func TestLinkAttachments_KeepsExistingAttachmentNames(t *testing.T) {
 	report := testreport.TestReport{TestSuites: []testreport.TestSuite{{TestCases: []testreport.TestCase{{
 		Name: "Flow A",
 		Properties: &testreport.Properties{Property: []testreport.Property{
+			{Name: "attachment_kiscica", Value: "cat.png"},
 			{Name: "attachment_1", Value: "custom.png"},
 		}},
 	}}}}}
 
-	result := linkAttachments(&report, map[string]flowBundle{"Flow A": {Files: []string{"logs/maestro.log"}}})
+	result := linkAttachments(&report, map[string]flowBundle{"Flow A": {Files: []string{"logs/maestro.log", "screenshots/final.png", "logs/device-logcat.txt"}}})
 
 	assert.Empty(t, result.Warnings)
 	assert.Equal(t, []testreport.Property{
+		{Name: "attachment_kiscica", Value: "cat.png"},
 		{Name: "attachment_1", Value: "custom.png"},
-		{Name: "attachment_2", Value: "Flow A/logs/maestro.log"},
+		{Name: "attachment_0", Value: "Flow A/logs/maestro.log"},
+		{Name: "attachment_2", Value: "Flow A/screenshots/final.png"},
+		{Name: "attachment_3", Value: "Flow A/logs/device-logcat.txt"},
 	}, report.TestSuites[0].TestCases[0].Properties.Property)
 }
 

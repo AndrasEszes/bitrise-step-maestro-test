@@ -9,10 +9,10 @@ import (
 	"github.com/bitrise-io/go-utils/v2/env"
 	"github.com/bitrise-io/go-utils/v2/errorutil"
 	"github.com/bitrise-io/go-utils/v2/exitcode"
+	"github.com/bitrise-io/go-utils/v2/filedownloader"
 	"github.com/bitrise-io/go-utils/v2/fileutil"
 	"github.com/bitrise-io/go-utils/v2/log"
 	"github.com/bitrise-io/go-utils/v2/pathutil"
-	"github.com/bitrise-io/go-utils/v2/retryhttp"
 	"github.com/bitrise-io/go-utils/v2/ziputil"
 
 	"github.com/bitrise-steplib/bitrise-step-maestro-test/step"
@@ -73,7 +73,7 @@ func createStep(logger log.Logger) step.Step {
 		logger,
 		stepconf.NewInputParser(envRepo),
 		commandFactory,
-		step.NewInstaller(logger, retryhttp.NewClient(logger), ziputil.NewZipManager(pathChecker), pathChecker),
+		step.NewInstaller(logger, filedownloader.NewDownloader(logger), ziputil.NewZipManager(pathChecker), pathChecker),
 		&outputExporter,
 		fileManager,
 	)
