@@ -8,7 +8,7 @@ app:
 workflows:
   test_android:
     steps:
-    - bitrise-run:
+    - bitrise-run@0:
         run_if: |-
           {{ or (envcontain "BITRISEIO_STACK_ID" "ubuntu") (not .IsCI) }}
         inputs:
@@ -33,7 +33,7 @@ workflows:
 
   test_android_failing_flow_exports_results:
     steps:
-    - bitrise-run:
+    - bitrise-run@0:
         run_if: |-
           {{ or (envcontain "BITRISEIO_STACK_ID" "ubuntu") (not .IsCI) }}
         inputs:
@@ -47,7 +47,7 @@ workflows:
     - _download_samples
     - _start_android_emulator
     steps:
-    - script:
+    - script@1:
         title: Write a failing flow
         inputs:
         - content: |-
@@ -66,7 +66,7 @@ workflows:
         - app_path: $SAMPLES_DIR/wikipedia.apk
         - flow_path: $SAMPLES_DIR/failing-flow.yaml
         - test_name: $TEST_NAME
-    - script:
+    - script@1:
         title: Verify the report has the failure
         is_always_run: true
         inputs:
@@ -80,7 +80,7 @@ workflows:
 
   test_ios:
     steps:
-    - bitrise-run:
+    - bitrise-run@0:
         run_if: |-
           {{ or (envcontain "BITRISEIO_STACK_ID" "osx") (not .IsCI) }}
         inputs:
@@ -97,7 +97,7 @@ workflows:
         inputs:
         - destination: platform=iOS Simulator,name=iPhone 17,OS=latest
         - wait_for_boot_timeout: 120
-    - script:
+    - script@1:
         title: Unzip sample app
         inputs:
         - content: |-
@@ -115,7 +115,7 @@ workflows:
 
   _download_samples:
     steps:
-    - script:
+    - script@1:
         title: Download Maestro samples
         inputs:
         - content: |-
@@ -128,7 +128,7 @@ workflows:
 
   _start_android_emulator:
     steps:
-    - script:
+    - script@1:
         title: Set ABI based on OS
         inputs:
         - content: |-
@@ -149,7 +149,7 @@ workflows:
 
   _verify_outputs:
     steps:
-    - script:
+    - script@1:
         title: Verify outputs
         is_always_run: true
         inputs:
