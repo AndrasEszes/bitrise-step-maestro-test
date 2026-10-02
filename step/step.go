@@ -22,6 +22,8 @@ const (
 	testOutputZipFileName   = "maestro-test-output.zip"
 	junitReportFileName     = "maestro-report.xml"
 	testOutputDirectoryName = "test-output"
+	disableAnalyticsEnv     = "MAESTRO_CLI_NO_ANALYTICS=true"
+	disableUpdateCheckEnv   = "MAESTRO_DISABLE_UPDATE_CHECK=true"
 )
 
 type Input struct {
@@ -149,7 +151,11 @@ func (s Step) Run(config Config, installation Installation) (Result, error) {
 	}
 
 	args := testArgs(config, result)
-	cmd := s.commandFactory.Create(installation.BinaryPath, args, &command.Opts{Stdout: os.Stdout, Stderr: os.Stderr})
+	cmd := s.commandFactory.Create(installation.BinaryPath, args, &command.Opts{
+		Stdout: os.Stdout,
+		Stderr: os.Stderr,
+		Env:    []string{disableAnalyticsEnv, disableUpdateCheckEnv},
+	})
 
 	s.logger.Println()
 	s.logger.Infof("Running Maestro flows")
