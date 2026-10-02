@@ -1,0 +1,169 @@
+format_version: "11"
+default_step_lib_source: https://github.com/bitrise-io/bitrise-steplib.git
+
+app:
+  envs:
+  - SAMPLES_URL: https://storage.googleapis.com/mobile.dev/samples/samples.zip
+
+workflows:
+  test_android:
+    steps:
+    - bitrise-run:
+        run_if: |-
+          {{ or (envcontain "BITRISEIO_STACK_ID" "ubuntu") (not .IsCI) }}
+        inputs:
+        - workflow_id: utility_test_android
+        - bitrise_config_path: ./e2e/bitrise.yml
+
+  utility_test_android:
+    envs:
+    - TEST_NAME: Maestro Android
+    before_run:
+    - _download_samples
+    - _start_android_emulator
+    steps:
+    - path::./:
+        title: Execute step
+        inputs:
+        - app_path: $SAMPLES_DIR/wikipedia.apk
+        - flow_path: $SAMPLES_DIR/android-flow.yaml
+        - test_name: $TEST_NAME
+    after_run:
+    - _verify_outputs
+
+  test_android_failing_flow_exports_results:
+    steps:
+    - bitrise-run:
+        run_if: |-
+          {{ or (envcontain "BITRISEIO_STACK_ID" "ubuntu") (not .IsCI) }}
+        inputs:
+        - workflow_id: utility_test_android_failing_flow_exports_results
+        - bitrise_config_path: ./e2e/bitrise.yml
+
+  utility_test_android_failing_flow_exports_results:
+    envs:
+    - TEST_NAME: Maestro Android failing
+    before_run:
+    - _download_samples
+    - _start_android_emulator
+    steps:
+    - script:
+        title: Write a failing flow
+        inputs:
+        - content: |-
+            #!/usr/bin/env bash
+            set -euxo pipefail
+            cat > "$SAMPLES_DIR/failing-flow.yaml" <<'EOF'
+            appId: org.wikipedia
+            ---
+            - launchApp
+            - assertVisible: "This text is never on screen"
+            EOF
+    - path::./:
+        title: Execute step
+        is_skippable: true
+        inputs:
+        - app_path: $SAMPLES_DIR/wikipedia.apk
+        - flow_path: $SAMPLES_DIR/failing-flow.yaml
+        - test_name: $TEST_NAME
+    - script:
+        title: Verify the report has the failure
+        is_always_run: true
+        inputs:
+        - content: |-
+            #!/usr/bin/env bash
+            set -euxo pipefail
+            grep -q "<failure" "$MAESTRO_JUNIT_PATH"
+            find "$BITRISE_TEST_DEPLOY_DIR" -path "*/$TEST_NAME/*/screenshots/*.png" | grep -q .
+    after_run:
+    - _verify_outputs
+
+  test_ios:
+    steps:
+    - bitrise-run:
+        run_if: |-
+          {{ or (envcontain "BITRISEIO_STACK_ID" "osx") (not .IsCI) }}
+        inputs:
+        - workflow_id: utility_test_ios
+        - bitrise_config_path: ./e2e/bitrise.yml
+
+  utility_test_ios:
+    envs:
+    - TEST_NAME: Maestro iOS
+    before_run:
+    - _download_samples
+    steps:
+    - xcode-start-simulator@0:
+        inputs:
+        - destination: platform=iOS Simulator,name=iPhone 17,OS=latest
+        - wait_for_boot_timeout: 120
+    - script:
+        title: Unzip sample app
+        inputs:
+        - content: |-
+            #!/usr/bin/env bash
+            set -euxo pipefail
+            unzip -q "$SAMPLES_DIR/wikipedia.zip" -d "$SAMPLES_DIR"
+    - path::./:
+        title: Execute step
+        inputs:
+        - app_path: $SAMPLES_DIR/Wikipedia.app
+        - flow_path: $SAMPLES_DIR/ios-flow.yaml
+        - test_name: $TEST_NAME
+    after_run:
+    - _verify_outputs
+
+  _download_samples:
+    steps:
+    - script:
+        title: Download Maestro samples
+        inputs:
+        - content: |-
+            #!/usr/bin/env bash
+            set -euxo pipefail
+            dir="$(mktemp -d)"
+            curl -fsSL "$SAMPLES_URL" -o "$dir/samples.zip"
+            unzip -q "$dir/samples.zip" -d "$dir"
+            envman add --key SAMPLES_DIR --value "$dir"
+
+  _start_android_emulator:
+    steps:
+    - script:
+        title: Set ABI based on OS
+        inputs:
+        - content: |-
+            #!/usr/bin/env bash
+            set -ex
+            if [[ "$OSTYPE" == "linux-gnu"* ]]; then
+              envman add --key ABI --value x86_64
+            else
+              envman add --key ABI --value arm64-v8a
+            fi
+    - avd-manager@2:
+        inputs:
+        - api_level: 34
+        - tag: google_apis
+        - profile: pixel
+        - abi: $ABI
+    - wait-for-android-emulator@1: {}
+
+  _verify_outputs:
+    steps:
+    - script:
+        title: Verify outputs
+        is_always_run: true
+        inputs:
+        - content: |-
+            #!/usr/bin/env bash
+            set -euxo pipefail
+            test -s "$MAESTRO_JUNIT_PATH"
+            grep -q "<testcase" "$MAESTRO_JUNIT_PATH"
+            test -s "$MAESTRO_TEST_OUTPUT_ZIP_PATH"
+
+            test_run_dir="$(find "$BITRISE_TEST_DEPLOY_DIR" -type d -name "$TEST_NAME" | head -1)"
+            test -s "$test_run_dir/test-info.json"
+            report="$test_run_dir/$(basename "$MAESTRO_JUNIT_PATH")"
+            grep -q 'name="attachment_0"' "$report"
+            grep -o 'name="attachment_[0-9]*" value="[^"]*"' "$report" | sed 's/.*value="\(.*\)"/\1/' | while read -r attachment; do
+              test -s "$test_run_dir/$attachment"
+            done
