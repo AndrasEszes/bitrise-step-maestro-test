@@ -52,9 +52,9 @@ inputs:
 - flow_path: .maestro
   opts:
     title: Flow path
-    summary: A Maestro flow file or a folder containing flow files.
+    summary: Maestro flow files or folders containing flow files, one per line.
     description: |-
-      A Maestro flow file or a folder containing flow files. If the folder has a `config.yaml`, Maestro uses it.
+      Maestro flow files or folders containing flow files, one per line. If a folder has a `config.yaml`, Maestro uses it.
     is_required: true
 
 - app_path: ""

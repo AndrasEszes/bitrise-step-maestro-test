@@ -47,6 +47,16 @@ func splitList(input string) []string {
 	return items
 }
 
+func splitLines(input string) []string {
+	var lines []string
+	for _, line := range strings.Split(input, "\n") {
+		if line = strings.TrimSpace(line); line != "" {
+			lines = append(lines, line)
+		}
+	}
+	return lines
+}
+
 func splitArgs(input string) ([]string, error) {
 	if strings.TrimSpace(input) == "" {
 		return nil, nil
@@ -63,7 +73,7 @@ func testArgs(config Config, result Result) []string {
 		args = append(args, "--exclude-tags", strings.Join(config.ExcludeTags, ","))
 	}
 	args = append(args, config.AdditionalArgs...)
-	return append(args, config.FlowPath)
+	return append(args, config.FlowPaths...)
 }
 
 func installAppCommand(app App) (string, []string) {

@@ -39,7 +39,7 @@ type Input struct {
 }
 
 type Config struct {
-	FlowPath       string
+	FlowPaths      []string
 	App            App
 	IncludeTags    []string
 	ExcludeTags    []string
@@ -99,6 +99,11 @@ func (s Step) ProcessConfig() (Config, error) {
 }
 
 func configFromInput(input Input) (Config, error) {
+	flowPaths := splitLines(input.FlowPath)
+	if len(flowPaths) == 0 {
+		return Config{}, fmt.Errorf("flow_path: no flow file or folder given")
+	}
+
 	app, err := parseApp(input.AppPath)
 	if err != nil {
 		return Config{}, err
@@ -115,7 +120,7 @@ func configFromInput(input Input) (Config, error) {
 	}
 
 	return Config{
-		FlowPath:       input.FlowPath,
+		FlowPaths:      flowPaths,
 		App:            app,
 		IncludeTags:    splitList(input.IncludeTags),
 		ExcludeTags:    splitList(input.ExcludeTags),

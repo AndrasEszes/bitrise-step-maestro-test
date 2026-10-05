@@ -39,7 +39,7 @@ func TestSplitList(t *testing.T) {
 
 func TestTestArgs(t *testing.T) {
 	config := Config{
-		FlowPath:       ".maestro",
+		FlowPaths:      []string{".maestro"},
 		IncludeTags:    []string{"smoke", "android"},
 		ExcludeTags:    []string{"flaky"},
 		AdditionalArgs: []string{"-e", "USERNAME=bitrise"},
@@ -59,7 +59,19 @@ func TestTestArgs_Minimal(t *testing.T) {
 	result := Result{JUnitPath: "/tmp/report.xml", TestOutputDir: "/tmp/out"}
 	assert.Equal(t, []string{
 		"test", "--format", "junit", "--output", "/tmp/report.xml", "--test-output-dir", "/tmp/out", "flows/login.yaml",
-	}, testArgs(Config{FlowPath: "flows/login.yaml"}, result))
+	}, testArgs(Config{FlowPaths: []string{"flows/login.yaml"}}, result))
+}
+
+func TestTestArgs_MultipleFlowPaths(t *testing.T) {
+	result := Result{JUnitPath: "/tmp/report.xml", TestOutputDir: "/tmp/out"}
+	assert.Equal(t, []string{
+		"test", "--format", "junit", "--output", "/tmp/report.xml", "--test-output-dir", "/tmp/out", "maestro/entry", "maestro/unlock",
+	}, testArgs(Config{FlowPaths: []string{"maestro/entry", "maestro/unlock"}}, result))
+}
+
+func TestSplitLines(t *testing.T) {
+	assert.Equal(t, []string{"maestro/entry", "maestro/my flows,v2"}, splitLines(" maestro/entry\n\n maestro/my flows,v2 \n"))
+	assert.Nil(t, splitLines(" \n"))
 }
 
 func TestInstallAppCommand(t *testing.T) {
