@@ -47,17 +47,14 @@ inputs:
       Maestro flow files or folders containing flow files, one per line. If a folder has a `config.yaml`, Maestro uses it.
     is_required: true
 
-- app_path: ""
+- app_path: |-
+    $BITRISE_APK_PATH
+    $BITRISE_APP_DIR_PATH
   opts:
     title: App path
-    summary: Optional path to an .apk (Android) or a simulator .app (iOS) to install before running the flows.
+    summary: The .apk or simulator .app to install before the flows run.
     description: |-
-      Optional path to the app to install on the device before running the flows.
-
-      - Android: an `.apk`, for example the `$BITRISE_APK_PATH` output of **Android Build**
-      - iOS: a simulator `.app`, for example the `$BITRISE_APP_DIR_PATH` output of **Xcode Build for Simulator**
-
-      Leave it empty if the app is already installed.
+      The .apk or simulator .app to install before the flows run. By default the output of **Android Build** or **Xcode Build for Simulator**, whichever is set. Set your own path to override it, or clear it if the app is already installed.
     is_required: false
 
 - include_tags: ""

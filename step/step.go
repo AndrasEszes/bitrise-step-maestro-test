@@ -6,6 +6,7 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 
 	"github.com/bitrise-io/go-android/v2/testresult/junitxml"
@@ -104,7 +105,7 @@ func configFromInput(input Input) (Config, error) {
 		return Config{}, fmt.Errorf("flow_path: no flow file or folder given")
 	}
 
-	app, err := parseApp(input.AppPath)
+	app, err := resolveApp(input.AppPath, runtime.GOOS)
 	if err != nil {
 		return Config{}, err
 	}

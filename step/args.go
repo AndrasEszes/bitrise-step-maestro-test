@@ -37,6 +37,33 @@ func parseApp(pth string) (App, error) {
 	}
 }
 
+// When app_path yields both an .apk and an .app, the host decides: Bitrise runs Android
+// emulators on Linux and iOS simulators on macOS.
+func resolveApp(input string, goos string) (App, error) {
+	var apps []App
+	for _, pth := range splitLines(input) {
+		app, err := parseApp(pth)
+		if err != nil {
+			return App{}, err
+		}
+		apps = append(apps, app)
+	}
+	if len(apps) == 0 {
+		return App{}, nil
+	}
+
+	preferred := PlatformAndroid
+	if goos == "darwin" {
+		preferred = PlatformIOS
+	}
+	for _, app := range apps {
+		if app.Platform == preferred {
+			return app, nil
+		}
+	}
+	return apps[0], nil
+}
+
 func splitList(input string) []string {
 	var items []string
 	for _, item := range strings.FieldsFunc(input, func(r rune) bool { return r == ',' || r == '\n' }) {

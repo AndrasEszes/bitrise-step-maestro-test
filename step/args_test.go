@@ -32,6 +32,38 @@ func TestParseApp(t *testing.T) {
 	}
 }
 
+func TestResolveApp(t *testing.T) {
+	apk := App{Path: "app-debug.apk", Platform: PlatformAndroid}
+	app := App{Path: "Runner.app", Platform: PlatformIOS}
+
+	tests := []struct {
+		name    string
+		input   string
+		goos    string
+		want    App
+		wantErr bool
+	}{
+		{name: "build outputs unset", input: "\n", goos: "linux", want: App{}},
+		{name: "only the apk is set", input: "app-debug.apk\n", goos: "darwin", want: apk},
+		{name: "only the app is set", input: "\nRunner.app", goos: "linux", want: app},
+		{name: "both set on Linux", input: "app-debug.apk\nRunner.app", goos: "linux", want: apk},
+		{name: "both set on macOS", input: "app-debug.apk\nRunner.app", goos: "darwin", want: app},
+		{name: "user override", input: "custom/My App.apk", goos: "linux", want: App{Path: "custom/My App.apk", Platform: PlatformAndroid}},
+		{name: "unsupported file", input: "app-debug.apk\nRunner.ipa", goos: "darwin", wantErr: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := resolveApp(tt.input, tt.goos)
+			if tt.wantErr {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
 func TestSplitList(t *testing.T) {
 	assert.Equal(t, []string{"smoke", "android", "login"}, splitList(" smoke, android\nlogin,,"))
 	assert.Nil(t, splitList(""))
