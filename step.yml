@@ -11,9 +11,13 @@ description: |-
 
   #### Device
 
-  The Step does not start a device. Start one earlier in the Workflow:
-  - Android: **AVD Manager** and **Wait for Android emulator**
-  - iOS: **Xcode Start Simulator**
+  If a device is already running, for example one started by **AVD Manager** or **Xcode Start Simulator**, the Step runs the flows on it and leaves it running.
+
+  If none is running, the Step boots one, and shuts it down when the flows finish:
+  - Android: an emulator from the newest preinstalled system image (Linux stacks only). Set **Android system image** to pick a different one.
+  - iOS: the `Bitrise iOS default` simulator of the newest iOS runtime.
+
+  If several devices are running, pass the one to use with `--device` in **Additional maestro test arguments**.
 
   #### Flow variables
 
@@ -74,6 +78,16 @@ inputs:
     title: Test name
     summary: The name the results are shown under on the Test Reports page.
     is_required: true
+
+- android_system_image: ""
+  opts:
+    title: Android system image
+    summary: The system image of the emulator the Step boots when no device is running. Leave empty to use the newest preinstalled one.
+    description: |-
+      The system image of the emulator the Step boots when no device is running, for example `system-images;android-36;google_apis;x86_64`.
+
+      Leave empty to use the newest preinstalled `google_apis`, then `google_apis_ps16k`, then `aosp_atd` image. An image that is not preinstalled is downloaded first.
+    is_required: false
 
 - maestro_version: ""
   opts:

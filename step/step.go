@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"slices"
+	"strings"
 
 	"github.com/bitrise-io/go-android/v2/testresult/junitxml"
 	"github.com/bitrise-io/go-steputils/v2/stepconf"
@@ -28,27 +29,31 @@ const (
 )
 
 type Input struct {
-	FlowPath       string `env:"flow_path,required"`
-	AppPath        string `env:"app_path"`
-	IncludeTags    string `env:"include_tags"`
-	ExcludeTags    string `env:"exclude_tags"`
-	AdditionalArgs string `env:"additional_args"`
-	TestName       string `env:"test_name,required"`
-	MaestroVersion string `env:"maestro_version"`
-	TestResultDir  string `env:"bitrise_test_result_dir,dir"`
-	DeployDir      string `env:"BITRISE_DEPLOY_DIR"`
+	FlowPath           string `env:"flow_path,required"`
+	AppPath            string `env:"app_path"`
+	IncludeTags        string `env:"include_tags"`
+	ExcludeTags        string `env:"exclude_tags"`
+	AdditionalArgs     string `env:"additional_args"`
+	TestName           string `env:"test_name,required"`
+	MaestroVersion     string `env:"maestro_version"`
+	AndroidSystemImage string `env:"android_system_image"`
+	TestResultDir      string `env:"bitrise_test_result_dir,dir"`
+	DeployDir          string `env:"BITRISE_DEPLOY_DIR"`
 }
 
 type Config struct {
-	FlowPaths      []string
-	App            App
-	IncludeTags    []string
-	ExcludeTags    []string
-	AdditionalArgs []string
-	TestName       string
-	MaestroVersion maestroVersion
-	TestResultDir  string
-	DeployDir      string
+	FlowPaths          []string
+	App                App
+	Platform           Platform
+	ManageDevice       bool
+	AndroidSystemImage string
+	IncludeTags        []string
+	ExcludeTags        []string
+	AdditionalArgs     []string
+	TestName           string
+	MaestroVersion     maestroVersion
+	TestResultDir      string
+	DeployDir          string
 }
 
 type Result struct {
@@ -68,6 +73,7 @@ type Step struct {
 	installer      Installer
 	exporter       Exporter
 	fileManager    fileutil.FileManager
+	devices        DeviceManager
 }
 
 func New(
@@ -77,6 +83,7 @@ func New(
 	installer Installer,
 	exporter Exporter,
 	fileManager fileutil.FileManager,
+	devices DeviceManager,
 ) Step {
 	return Step{
 		logger:         logger,
@@ -85,6 +92,7 @@ func New(
 		installer:      installer,
 		exporter:       exporter,
 		fileManager:    fileManager,
+		devices:        devices,
 	}
 }
 
@@ -120,16 +128,24 @@ func configFromInput(input Input) (Config, error) {
 		return Config{}, err
 	}
 
+	androidSystemImage := strings.TrimSpace(input.AndroidSystemImage)
+	if err := validateSystemImage(androidSystemImage); err != nil {
+		return Config{}, err
+	}
+
 	return Config{
-		FlowPaths:      flowPaths,
-		App:            app,
-		IncludeTags:    splitList(input.IncludeTags),
-		ExcludeTags:    splitList(input.ExcludeTags),
-		AdditionalArgs: additionalArgs,
-		TestName:       input.TestName,
-		MaestroVersion: maestroVersion,
-		TestResultDir:  input.TestResultDir,
-		DeployDir:      input.DeployDir,
+		FlowPaths:          flowPaths,
+		App:                app,
+		Platform:           resolvePlatform(app, runtime.GOOS),
+		ManageDevice:       !hasDeviceArg(additionalArgs),
+		AndroidSystemImage: androidSystemImage,
+		IncludeTags:        splitList(input.IncludeTags),
+		ExcludeTags:        splitList(input.ExcludeTags),
+		AdditionalArgs:     additionalArgs,
+		TestName:           input.TestName,
+		MaestroVersion:     maestroVersion,
+		TestResultDir:      input.TestResultDir,
+		DeployDir:          input.DeployDir,
 	}, nil
 }
 
@@ -143,7 +159,18 @@ func (s Step) InstallDependencies(config Config) (Installation, error) {
 }
 
 func (s Step) Run(config Config, installation Installation) (Result, error) {
-	if err := s.installApp(config); err != nil {
+	device := Device{Release: func() {}}
+	if config.ManageDevice {
+		s.logger.Println()
+		s.logger.Infof("Preparing the %s device", config.Platform)
+		var err error
+		if device, err = s.devices.Acquire(config); err != nil {
+			return Result{}, fmt.Errorf("prepare device: %w", err)
+		}
+	}
+	defer device.Release()
+
+	if err := s.installApp(config, device.ID); err != nil {
 		return Result{}, err
 	}
 
@@ -156,7 +183,7 @@ func (s Step) Run(config Config, installation Installation) (Result, error) {
 		TestOutputDir: filepath.Join(workDir, testOutputDirectoryName),
 	}
 
-	args := testArgs(config, result)
+	args := testArgs(config, result, device.ID)
 	cmd := s.commandFactory.Create(installation.BinaryPath, args, &command.Opts{
 		Stdout: os.Stdout,
 		Stderr: os.Stderr,
@@ -200,12 +227,12 @@ func (s Step) ExportOutputs(config Config, result Result) error {
 	return nil
 }
 
-func (s Step) installApp(config Config) error {
+func (s Step) installApp(config Config, deviceID string) error {
 	if config.App.Path == "" {
 		return nil
 	}
 
-	name, args := installAppCommand(config.App)
+	name, args := installAppCommand(config.App, deviceID)
 	cmd := s.commandFactory.Create(name, args, &command.Opts{Stdout: os.Stdout, Stderr: os.Stderr})
 	s.logger.Println()
 	s.logger.Infof("Installing app")
