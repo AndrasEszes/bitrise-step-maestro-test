@@ -4,7 +4,7 @@ go 1.23
 
 require (
 	github.com/bitrise-io/go-android/v2 v2.0.0-alpha.19
-	github.com/bitrise-io/go-steputils/v2 v2.0.0-alpha.58
+	github.com/bitrise-io/go-steputils/v2 v2.0.0-alpha.61
 	github.com/bitrise-io/go-utils/v2 v2.0.0-alpha.39
 	github.com/bitrise-io/go-xcode/v2 v2.0.0-alpha.88
 	github.com/hashicorp/go-version v1.9.0
