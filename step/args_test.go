@@ -140,10 +140,21 @@ func TestResolvePlatform(t *testing.T) {
 }
 
 func TestPlatformArg(t *testing.T) {
-	assert.Equal(t, PlatformIOS, platformArg([]string{"-e", "A=b", "--platform", "iOS"}))
-	assert.Equal(t, PlatformAndroid, platformArg([]string{"--platform=android"}))
-	assert.Equal(t, PlatformAndroid, platformArg([]string{"-p", "android"}))
-	assert.Equal(t, PlatformUnknown, platformArg([]string{"--platform", "web"}))
-	assert.Equal(t, PlatformUnknown, platformArg([]string{"--platform"}))
-	assert.Equal(t, PlatformUnknown, platformArg([]string{"-e", "PLATFORM=ios"}))
+	tests := []struct {
+		args       []string
+		want       Platform
+		wantPassed bool
+	}{
+		{args: []string{"-e", "A=b", "--platform", "iOS"}, want: PlatformIOS, wantPassed: true},
+		{args: []string{"--platform=android"}, want: PlatformAndroid, wantPassed: true},
+		{args: []string{"-p", "android"}, want: PlatformAndroid, wantPassed: true},
+		{args: []string{"--platform", "web"}, want: PlatformUnknown, wantPassed: true},
+		{args: []string{"--platform"}, want: PlatformUnknown, wantPassed: true},
+		{args: []string{"-e", "PLATFORM=ios"}, want: PlatformUnknown, wantPassed: false},
+	}
+	for _, tt := range tests {
+		platform, passed := platformArg(tt.args)
+		assert.Equal(t, tt.want, platform, tt.args)
+		assert.Equal(t, tt.wantPassed, passed, tt.args)
+	}
 }

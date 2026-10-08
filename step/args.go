@@ -63,7 +63,7 @@ func resolveApp(input string, goos string) (App, error) {
 
 // resolvePlatform puts a platform passed to maestro test first, because Maestro runs the flows only on that platform.
 func resolvePlatform(app App, additionalArgs []string, goos string) Platform {
-	if platform := platformArg(additionalArgs); platform != PlatformUnknown {
+	if platform, _ := platformArg(additionalArgs); platform != PlatformUnknown {
 		return platform
 	}
 	if app.Platform != PlatformUnknown {
@@ -72,7 +72,9 @@ func resolvePlatform(app App, additionalArgs []string, goos string) Platform {
 	return hostPlatform(goos)
 }
 
-func platformArg(args []string) Platform {
+// platformArg returns the platform passed to maestro test, and whether one was passed at all: a platform the step has
+// no device for, such as web, comes back as PlatformUnknown.
+func platformArg(args []string) (Platform, bool) {
 	for i, arg := range args {
 		name, value, hasValue := strings.Cut(arg, "=")
 		if name != "-p" && name != "--platform" {
@@ -83,12 +85,24 @@ func platformArg(args []string) Platform {
 		}
 		switch strings.ToLower(value) {
 		case "android":
-			return PlatformAndroid
+			return PlatformAndroid, true
 		case "ios":
-			return PlatformIOS
+			return PlatformIOS, true
+		default:
+			return PlatformUnknown, true
 		}
 	}
-	return PlatformUnknown
+	return PlatformUnknown, false
+}
+
+// managesDevice tells whether the step prepares the device: not when the device is picked in the arguments, or when
+// Maestro is asked to run on a platform the step has no device for.
+func managesDevice(additionalArgs []string) bool {
+	if hasDeviceArg(additionalArgs) {
+		return false
+	}
+	platform, passed := platformArg(additionalArgs)
+	return !passed || platform != PlatformUnknown
 }
 
 func hostPlatform(goos string) Platform {

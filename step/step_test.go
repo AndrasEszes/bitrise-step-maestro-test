@@ -48,6 +48,10 @@ func TestConfigFromInput_ManageDevice(t *testing.T) {
 	require.NoError(t, err)
 	assert.False(t, config.ManageDevice, "a device picked in additional_args is left to Maestro")
 
+	config, err = configFromInput(Input{FlowPath: ".maestro", TestName: "Maestro", AdditionalArgs: "--platform web"})
+	require.NoError(t, err)
+	assert.False(t, config.ManageDevice, "a platform the step has no device for is left to Maestro")
+
 	_, err = configFromInput(Input{FlowPath: ".maestro", TestName: "Maestro", AndroidSystemImage: "android-36"})
 	require.ErrorContains(t, err, "android_system_image")
 }
