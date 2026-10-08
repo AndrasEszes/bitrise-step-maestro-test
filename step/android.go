@@ -61,22 +61,23 @@ func (a androidDevices) acquire() (Device, error) {
 		return Device{}, err
 	}
 
-	serial := a.serialHint
-	if serial != "" {
-		a.logger.Printf("Using the emulator from %s: %s", emulatorSerialEnv, serial)
-	} else {
-		running, err := a.runningDevices()
-		if err != nil {
-			return Device{}, err
-		}
-		if serial, err = pickRunningDevice(running); err != nil {
-			return Device{}, err
-		}
-		if serial != "" {
-			a.logger.Printf("Using the running device: %s", serial)
-		}
+	running, err := a.runningDevices()
+	if err != nil {
+		return Device{}, err
+	}
+	serial, err := pickEmulator(running, a.serialHint)
+	if err != nil {
+		return Device{}, err
+	}
+	if a.serialHint != "" && serial != a.serialHint {
+		a.logger.Warnf("%s is %s, but adb does not list that device, so it is ignored", emulatorSerialEnv, a.serialHint)
 	}
 	if serial != "" {
+		if serial == a.serialHint {
+			a.logger.Printf("Using the emulator from %s: %s", emulatorSerialEnv, serial)
+		} else {
+			a.logger.Printf("Using the running device: %s", serial)
+		}
 		if err := adb.WaitForDevice(serial, androidBootTimeout); err != nil {
 			return Device{}, err
 		}
@@ -272,6 +273,15 @@ func (a androidDevices) runningDevices() ([]string, error) {
 		return nil, fmt.Errorf("adb devices: %w\n%s", err, out)
 	}
 	return parseADBDevices(out), nil
+}
+
+// pickEmulator prefers the serial an earlier Step exported, but only while adb lists it: a serial of a device that is
+// gone would otherwise be waited on until the boot timeout. AVD Manager exports the serial once adb lists the device.
+func pickEmulator(running []string, serialHint string) (string, error) {
+	if serialHint != "" && slices.Contains(running, serialHint) {
+		return serialHint, nil
+	}
+	return pickRunningDevice(running)
 }
 
 // parseADBDevices returns every serial adb lists, offline ones included: a device that is still booting

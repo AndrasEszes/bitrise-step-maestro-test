@@ -122,6 +122,23 @@ func TestPickRunningDevice(t *testing.T) {
 	require.ErrorContains(t, err, "--device")
 }
 
+func TestPickEmulator(t *testing.T) {
+	serial, err := pickEmulator([]string{"emulator-5554", "emulator-5556"}, "emulator-5556")
+	require.NoError(t, err)
+	assert.Equal(t, "emulator-5556", serial, "the exported serial picks among several devices")
+
+	serial, err = pickEmulator(nil, "emulator-5554")
+	require.NoError(t, err)
+	assert.Empty(t, serial, "a serial adb does not list is ignored, so the step boots an emulator")
+
+	serial, err = pickEmulator([]string{"emulator-5556"}, "emulator-5554")
+	require.NoError(t, err)
+	assert.Equal(t, "emulator-5556", serial)
+
+	_, err = pickEmulator([]string{"emulator-5556", "emulator-5558"}, "emulator-5554")
+	require.ErrorContains(t, err, "--device")
+}
+
 func TestHasDeviceArg(t *testing.T) {
 	assert.True(t, hasDeviceArg([]string{"-e", "A=b", "--device", "emulator-5554"}))
 	assert.True(t, hasDeviceArg([]string{"--udid=UDID-1"}))
