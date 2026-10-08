@@ -37,6 +37,7 @@ type androidDevices struct {
 	logger         log.Logger
 	commandFactory command.Factory
 	androidHome    string
+	adb            string
 	serialHint     string
 	systemImage    string
 }
@@ -46,9 +47,22 @@ func newAndroidDevices(logger log.Logger, commandFactory command.Factory, androi
 		logger:         logger,
 		commandFactory: commandFactory,
 		androidHome:    androidHome,
+		adb:            adbPath(androidHome),
 		serialHint:     serialHint,
 		systemImage:    systemImage,
 	}
+}
+
+// adbPath is the SDK's adb, the one adbmanager runs too, and adb on PATH only without an SDK: adb clients of different
+// versions restart each other's server, which drops the emulator connection.
+func adbPath(androidHome string) string {
+	if androidHome != "" {
+		pth := filepath.Join(androidHome, "platform-tools", "adb")
+		if _, err := os.Stat(pth); err == nil {
+			return pth
+		}
+	}
+	return "adb"
 }
 
 func (a androidDevices) acquire() (Device, error) {
@@ -107,7 +121,7 @@ func (a androidDevices) boot(sdkModel *sdk.Model, adb *adbmanager.Model) (Device
 	if err != nil {
 		return Device{}, err
 	}
-	release := func() { emulator.stop(a.logger, a.commandFactory) }
+	release := func() { emulator.stop(a.logger, a.commandFactory, a.adb) }
 
 	if err := adb.WaitForDevice(emulator.serial, androidBootTimeout-time.Since(start)); err != nil {
 		release()
@@ -221,24 +235,24 @@ func (a androidDevices) startEmulator() (runningEmulator, error) {
 
 		running, err := a.runningDevices()
 		if err != nil {
-			emulator.stop(a.logger, a.commandFactory)
+			emulator.stop(a.logger, a.commandFactory, a.adb)
 			return runningEmulator{}, err
 		}
 		if len(running) > 0 {
 			emulator.serial = running[0]
 		} else if time.Now().After(deadline) {
-			emulator.stop(a.logger, a.commandFactory)
+			emulator.stop(a.logger, a.commandFactory, a.adb)
 			return runningEmulator{}, fmt.Errorf("emulator did not come online in %s, see %s", androidBootTimeout, emulator.logPath)
 		}
 	}
 	return emulator, nil
 }
 
-func (e runningEmulator) stop(logger log.Logger, commandFactory command.Factory) {
+func (e runningEmulator) stop(logger log.Logger, commandFactory command.Factory, adb string) {
 	logger.Println()
 	logger.Infof("Shutting down the emulator the step started")
 	if e.serial != "" {
-		cmd := commandFactory.Create("adb", []string{"-s", e.serial, "emu", "kill"}, nil)
+		cmd := commandFactory.Create(adb, []string{"-s", e.serial, "emu", "kill"}, nil)
 		logger.TDonef("$ %s", cmd.PrintableCommandArgs())
 		if out, err := cmd.RunAndReturnTrimmedCombinedOutput(); err != nil {
 			logger.Warnf("adb emu kill: %s\n%s", err, out)
@@ -258,7 +272,7 @@ func (e runningEmulator) stop(logger log.Logger, commandFactory command.Factory)
 func (a androidDevices) disableAnimations(serial string) error {
 	a.logger.Printf("Disabling animations")
 	for _, setting := range animationSettings {
-		cmd := a.commandFactory.Create("adb", []string{"-s", serial, "shell", "settings", "put", "global", setting, "0"}, nil)
+		cmd := a.commandFactory.Create(a.adb, []string{"-s", serial, "shell", "settings", "put", "global", setting, "0"}, nil)
 		if out, err := cmd.RunAndReturnTrimmedCombinedOutput(); err != nil {
 			return fmt.Errorf("disable animations (%s): %w\n%s", setting, err, out)
 		}
@@ -267,7 +281,7 @@ func (a androidDevices) disableAnimations(serial string) error {
 }
 
 func (a androidDevices) runningDevices() ([]string, error) {
-	cmd := a.commandFactory.Create("adb", []string{"devices"}, nil)
+	cmd := a.commandFactory.Create(a.adb, []string{"devices"}, nil)
 	out, err := cmd.RunAndReturnTrimmedCombinedOutput()
 	if err != nil {
 		return nil, fmt.Errorf("adb devices: %w\n%s", err, out)

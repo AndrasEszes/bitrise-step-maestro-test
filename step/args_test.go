@@ -113,20 +113,20 @@ func TestSplitLines(t *testing.T) {
 }
 
 func TestInstallAppCommand(t *testing.T) {
-	name, args := installAppCommand(App{Path: "app.apk", Platform: PlatformAndroid}, "")
+	name, args := installAppCommand(App{Path: "app.apk", Platform: PlatformAndroid}, "", "")
 	assert.Equal(t, "adb", name)
 	assert.Equal(t, []string{"install", "-r", "app.apk"}, args)
 
-	name, args = installAppCommand(App{Path: "My.app", Platform: PlatformIOS}, "")
+	name, args = installAppCommand(App{Path: "My.app", Platform: PlatformIOS}, "", "")
 	assert.Equal(t, "xcrun", name)
 	assert.Equal(t, []string{"simctl", "install", "booted", "My.app"}, args)
 }
 
 func TestInstallAppCommand_Device(t *testing.T) {
-	_, args := installAppCommand(App{Path: "app.apk", Platform: PlatformAndroid}, "emulator-5554")
+	_, args := installAppCommand(App{Path: "app.apk", Platform: PlatformAndroid}, "emulator-5554", "")
 	assert.Equal(t, []string{"-s", "emulator-5554", "install", "-r", "app.apk"}, args)
 
-	_, args = installAppCommand(App{Path: "My.app", Platform: PlatformIOS}, "UDID-1")
+	_, args = installAppCommand(App{Path: "My.app", Platform: PlatformIOS}, "UDID-1", "")
 	assert.Equal(t, []string{"simctl", "install", "UDID-1", "My.app"}, args)
 }
 

@@ -39,10 +39,6 @@ func TestWaitUntilBooted_TimesOut(t *testing.T) {
 }
 
 func iosDevicesWithFakeXcrun(t *testing.T, script string) iosDevices {
-	binDir := t.TempDir()
-	writeFile(t, filepath.Join(binDir, "xcrun"), "#!/bin/sh\n"+script)
-	require.NoError(t, os.Chmod(filepath.Join(binDir, "xcrun"), 0755))
-	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
-
+	fakeOnPath(t, "xcrun", script)
 	return iosDevices{logger: log.NewLogger(), commandFactory: command.NewFactory(env.NewRepository())}
 }

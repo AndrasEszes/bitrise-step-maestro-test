@@ -40,6 +40,7 @@ type Input struct {
 	ShutdownDevice     bool   `env:"shutdown_device,opt[yes,no]"`
 	TestResultDir      string `env:"bitrise_test_result_dir,dir"`
 	DeployDir          string `env:"BITRISE_DEPLOY_DIR"`
+	AndroidHome        string `env:"ANDROID_HOME"`
 }
 
 type Config struct {
@@ -56,6 +57,7 @@ type Config struct {
 	MaestroVersion     maestroVersion
 	TestResultDir      string
 	DeployDir          string
+	AndroidHome        string
 }
 
 type Result struct {
@@ -149,6 +151,7 @@ func configFromInput(input Input) (Config, error) {
 		MaestroVersion:     maestroVersion,
 		TestResultDir:      input.TestResultDir,
 		DeployDir:          input.DeployDir,
+		AndroidHome:        input.AndroidHome,
 	}, nil
 }
 
@@ -244,7 +247,7 @@ func (s Step) installApp(config Config, deviceID string) error {
 		return nil
 	}
 
-	name, args := installAppCommand(config.App, deviceID)
+	name, args := installAppCommand(config.App, deviceID, config.AndroidHome)
 	cmd := s.commandFactory.Create(name, args, &command.Opts{Stdout: os.Stdout, Stderr: os.Stderr})
 	s.logger.Println()
 	s.logger.Infof("Installing app")
