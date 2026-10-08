@@ -1,8 +1,10 @@
 package step
 
 import (
+	"errors"
 	"fmt"
 	"maps"
+	"os"
 	"slices"
 	"strings"
 	"time"
@@ -24,6 +26,7 @@ const (
 
 type iosDevices struct {
 	logger           log.Logger
+	commandFactory   command.Factory
 	deviceFinder     destination.DeviceFinder
 	simulatorManager simulator.Manager
 	destinationHint  string
@@ -36,6 +39,7 @@ func newIOSDevices(logger log.Logger, commandFactory command.Factory, destinatio
 	}
 	return iosDevices{
 		logger:           logger,
+		commandFactory:   commandFactory,
 		deviceFinder:     destination.NewDeviceFinder(logger, commandFactory, xcodeVersion),
 		simulatorManager: simulator.NewManager(logger, commandFactory),
 		destinationHint:  destinationHint,
@@ -58,7 +62,7 @@ func (i iosDevices) acquire() (Device, error) {
 	}
 	if udid != "" {
 		i.logger.Printf("Using the running simulator: %s", udid)
-		if err := i.simulatorManager.WaitForBootFinished(udid, iosBootTimeout); err != nil {
+		if err := i.waitUntilBooted(udid, iosBootTimeout); err != nil {
 			return Device{}, err
 		}
 		return Device{ID: udid}, nil
@@ -80,7 +84,7 @@ func (i iosDevices) useDestination(dest string) (Device, error) {
 	i.logger.Printf("Simulator: %s, %s, %s (%s)", device.Name, device.OS, device.UDID, device.State)
 
 	if device.State != simulatorShutdownState {
-		if err := i.simulatorManager.WaitForBootFinished(device.UDID, iosBootTimeout); err != nil {
+		if err := i.waitUntilBooted(device.UDID, iosBootTimeout); err != nil {
 			return Device{}, err
 		}
 		return Device{ID: device.UDID}, nil
@@ -108,6 +112,31 @@ func (i iosDevices) useDestination(dest string) (Device, error) {
 		HintEnv:   xcodeDestinationEnv,
 		HintValue: fmt.Sprintf("platform=%s,name=%s,OS=%s", device.Platform, device.Name, device.OS),
 	}, nil
+}
+
+// waitUntilBooted waits for a simulator the step found running. It must not change the simulator, so it does not use
+// WaitForBootFinished, which launches the Settings app to tell that the boot finished.
+func (i iosDevices) waitUntilBooted(udid string, timeout time.Duration) error {
+	cmd := i.commandFactory.Create("xcrun", []string{"simctl", "bootstatus", udid}, &command.Opts{Stdout: os.Stdout, Stderr: os.Stderr})
+	i.logger.TDonef("$ %s", cmd.PrintableCommandArgs())
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("wait for simulator %s: %w", udid, err)
+	}
+
+	exited := make(chan error, 1)
+	go func() { exited <- cmd.Wait() }()
+	select {
+	case err := <-exited:
+		if err != nil {
+			return fmt.Errorf("wait for simulator %s: %w", udid, err)
+		}
+		return nil
+	case <-time.After(timeout):
+		if err := cmd.Kill(); err != nil && !errors.Is(err, os.ErrProcessDone) {
+			i.logger.Warnf("Kill simctl bootstatus: %s", err)
+		}
+		return fmt.Errorf("simulator %s did not finish booting in %s", udid, timeout)
+	}
 }
 
 // runningSimulators counts Booting simulators as running too, so the step never boots a second one next to them.
