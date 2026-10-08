@@ -59,34 +59,6 @@ workflows:
     - _verify_outputs
     - _verify_android_device_shut_down
 
-  test_android_16k_page_size_image:
-    steps:
-    - bitrise-run@0:
-        run_if: |-
-          {{ or (envcontain "BITRISEIO_STACK_ID" "ubuntu") (not .IsCI) }}
-        inputs:
-        - workflow_id: utility_test_android_16k_page_size_image
-        - bitrise_config_path: ./e2e/bitrise.yml
-
-  utility_test_android_16k_page_size_image:
-    envs:
-    - TEST_NAME: Maestro Android 16 KB page size
-    - BITRISE_EMULATOR_SERIAL: ""
-    before_run:
-    - _download_samples
-    - _shut_down_android_devices
-    steps:
-    - path::./:
-        title: Execute step
-        inputs:
-        - app_path: $SAMPLES_DIR/wikipedia.apk
-        - flow_path: $SAMPLES_DIR/android-flow.yaml
-        - test_name: $TEST_NAME
-        - android_system_image: system-images;android-37.0;google_apis_ps16k;x86_64
-    after_run:
-    - _verify_outputs
-    - _verify_android_device_shut_down
-
   test_android_steps_share_device:
     steps:
     - bitrise-run@0:

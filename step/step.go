@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"slices"
-	"strings"
 
 	"github.com/bitrise-io/go-android/v2/testresult/junitxml"
 	"github.com/bitrise-io/go-steputils/v2/stepconf"
@@ -29,35 +28,33 @@ const (
 )
 
 type Input struct {
-	FlowPath           string `env:"flow_path,required"`
-	AppPath            string `env:"app_path"`
-	IncludeTags        string `env:"include_tags"`
-	ExcludeTags        string `env:"exclude_tags"`
-	AdditionalArgs     string `env:"additional_args"`
-	TestName           string `env:"test_name,required"`
-	MaestroVersion     string `env:"maestro_version"`
-	AndroidSystemImage string `env:"android_system_image"`
-	ShutdownDevice     bool   `env:"shutdown_device,opt[yes,no]"`
-	TestResultDir      string `env:"bitrise_test_result_dir,dir"`
-	DeployDir          string `env:"BITRISE_DEPLOY_DIR"`
-	AndroidHome        string `env:"ANDROID_HOME"`
+	FlowPath       string `env:"flow_path,required"`
+	AppPath        string `env:"app_path"`
+	IncludeTags    string `env:"include_tags"`
+	ExcludeTags    string `env:"exclude_tags"`
+	AdditionalArgs string `env:"additional_args"`
+	TestName       string `env:"test_name,required"`
+	MaestroVersion string `env:"maestro_version"`
+	ShutdownDevice bool   `env:"shutdown_device,opt[yes,no]"`
+	TestResultDir  string `env:"bitrise_test_result_dir,dir"`
+	DeployDir      string `env:"BITRISE_DEPLOY_DIR"`
+	AndroidHome    string `env:"ANDROID_HOME"`
 }
 
 type Config struct {
-	FlowPaths          []string
-	App                App
-	Platform           Platform
-	ManageDevice       bool
-	AndroidSystemImage string
-	ShutdownDevice     bool
-	IncludeTags        []string
-	ExcludeTags        []string
-	AdditionalArgs     []string
-	TestName           string
-	MaestroVersion     maestroVersion
-	TestResultDir      string
-	DeployDir          string
-	AndroidHome        string
+	FlowPaths      []string
+	App            App
+	Platform       Platform
+	ManageDevice   bool
+	ShutdownDevice bool
+	IncludeTags    []string
+	ExcludeTags    []string
+	AdditionalArgs []string
+	TestName       string
+	MaestroVersion maestroVersion
+	TestResultDir  string
+	DeployDir      string
+	AndroidHome    string
 }
 
 type Result struct {
@@ -122,7 +119,7 @@ func configFromInput(input Input) (Config, error) {
 		return Config{}, fmt.Errorf("additional_args: %w", err)
 	}
 
-	app, platform, err := resolveTarget(input.AppPath, additionalArgs, runtime.GOOS)
+	app, err := resolveApp(input.AppPath, runtime.GOOS)
 	if err != nil {
 		return Config{}, err
 	}
@@ -132,26 +129,20 @@ func configFromInput(input Input) (Config, error) {
 		return Config{}, err
 	}
 
-	androidSystemImage := strings.TrimSpace(input.AndroidSystemImage)
-	if err := validateSystemImage(androidSystemImage); err != nil {
-		return Config{}, err
-	}
-
 	return Config{
-		FlowPaths:          flowPaths,
-		App:                app,
-		Platform:           platform,
-		ManageDevice:       managesDevice(additionalArgs),
-		AndroidSystemImage: androidSystemImage,
-		ShutdownDevice:     input.ShutdownDevice,
-		IncludeTags:        splitList(input.IncludeTags),
-		ExcludeTags:        splitList(input.ExcludeTags),
-		AdditionalArgs:     additionalArgs,
-		TestName:           input.TestName,
-		MaestroVersion:     maestroVersion,
-		TestResultDir:      input.TestResultDir,
-		DeployDir:          input.DeployDir,
-		AndroidHome:        input.AndroidHome,
+		FlowPaths:      flowPaths,
+		App:            app,
+		Platform:       resolvePlatform(app, runtime.GOOS),
+		ManageDevice:   !hasDeviceArg(additionalArgs),
+		ShutdownDevice: input.ShutdownDevice,
+		IncludeTags:    splitList(input.IncludeTags),
+		ExcludeTags:    splitList(input.ExcludeTags),
+		AdditionalArgs: additionalArgs,
+		TestName:       input.TestName,
+		MaestroVersion: maestroVersion,
+		TestResultDir:  input.TestResultDir,
+		DeployDir:      input.DeployDir,
+		AndroidHome:    input.AndroidHome,
 	}, nil
 }
 

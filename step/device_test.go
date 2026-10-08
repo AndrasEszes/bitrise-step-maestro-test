@@ -67,7 +67,7 @@ func TestSelectSystemImage(t *testing.T) {
 
 func TestSelectSystemImage_NoneForABI(t *testing.T) {
 	_, err := selectSystemImage(nobleImages, "arm64-v8a")
-	require.ErrorContains(t, err, "android_system_image")
+	require.ErrorContains(t, err, "AVD Manager")
 
 	_, err = selectSystemImage([]string{"system-images;android-36;android-tv;x86_64"}, "x86_64")
 	require.Error(t, err)
@@ -89,13 +89,6 @@ func TestInstalledSystemImages(t *testing.T) {
 	images, err = installedSystemImages(t.TempDir())
 	require.NoError(t, err)
 	assert.Empty(t, images)
-}
-
-func TestValidateSystemImage(t *testing.T) {
-	require.NoError(t, validateSystemImage(""))
-	require.NoError(t, validateSystemImage("system-images;android-37.0;google_apis_ps16k;x86_64"))
-	require.Error(t, validateSystemImage("android-36"))
-	require.Error(t, validateSystemImage("system-images;android-36;google_apis"))
 }
 
 func TestHostABI(t *testing.T) {

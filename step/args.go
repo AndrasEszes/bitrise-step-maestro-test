@@ -37,70 +37,35 @@ func parseApp(pth string) (App, error) {
 	}
 }
 
-// resolveTarget decides the platform first, then the app for it: when app_path yields both an .apk and an .app, the one
-// for that platform is installed. A platform passed to maestro test wins, because Maestro runs the flows only on that
-// platform. Then an app of a single platform decides, then the host: Bitrise runs Android emulators on Linux and iOS
-// simulators on macOS.
-func resolveTarget(appInput string, additionalArgs []string, goos string) (App, Platform, error) {
+// When app_path yields both an .apk and an .app, the host decides: Bitrise runs Android
+// emulators on Linux and iOS simulators on macOS.
+func resolveApp(input string, goos string) (App, error) {
 	var apps []App
-	for _, pth := range splitLines(appInput) {
+	for _, pth := range splitLines(input) {
 		app, err := parseApp(pth)
 		if err != nil {
-			return App{}, PlatformUnknown, err
+			return App{}, err
 		}
 		apps = append(apps, app)
 	}
-
-	platform, _ := platformArg(additionalArgs)
-	if platform == PlatformUnknown && len(apps) == 1 {
-		platform = apps[0].Platform
-	}
-	if platform == PlatformUnknown {
-		platform = hostPlatform(goos)
+	if len(apps) == 0 {
+		return App{}, nil
 	}
 
+	preferred := hostPlatform(goos)
 	for _, app := range apps {
-		if app.Platform == platform {
-			return app, platform, nil
+		if app.Platform == preferred {
+			return app, nil
 		}
 	}
-	if len(apps) > 0 {
-		return apps[0], platform, nil
-	}
-	return App{}, platform, nil
+	return apps[0], nil
 }
 
-// platformArg returns the platform passed to maestro test, and whether one was passed at all: a platform the step has
-// no device for, such as web, comes back as PlatformUnknown.
-func platformArg(args []string) (Platform, bool) {
-	for i, arg := range args {
-		name, value, hasValue := strings.Cut(arg, "=")
-		if name != "-p" && name != "--platform" {
-			continue
-		}
-		if !hasValue && i+1 < len(args) {
-			value = args[i+1]
-		}
-		switch strings.ToLower(value) {
-		case "android":
-			return PlatformAndroid, true
-		case "ios":
-			return PlatformIOS, true
-		default:
-			return PlatformUnknown, true
-		}
+func resolvePlatform(app App, goos string) Platform {
+	if app.Platform != PlatformUnknown {
+		return app.Platform
 	}
-	return PlatformUnknown, false
-}
-
-// managesDevice tells whether the step prepares the device: not when the device is picked in the arguments, or when
-// Maestro is asked to run on a platform the step has no device for.
-func managesDevice(additionalArgs []string) bool {
-	if hasDeviceArg(additionalArgs) {
-		return false
-	}
-	platform, passed := platformArg(additionalArgs)
-	return !passed || platform != PlatformUnknown
+	return hostPlatform(goos)
 }
 
 func hostPlatform(goos string) Platform {

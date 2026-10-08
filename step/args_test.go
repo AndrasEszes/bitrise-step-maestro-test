@@ -32,40 +32,34 @@ func TestParseApp(t *testing.T) {
 	}
 }
 
-func TestResolveTarget(t *testing.T) {
+func TestResolveApp(t *testing.T) {
 	apk := App{Path: "app-debug.apk", Platform: PlatformAndroid}
 	app := App{Path: "Runner.app", Platform: PlatformIOS}
 
 	tests := []struct {
-		name         string
-		input        string
-		args         []string
-		goos         string
-		wantApp      App
-		wantPlatform Platform
-		wantErr      bool
+		name    string
+		input   string
+		goos    string
+		want    App
+		wantErr bool
 	}{
-		{name: "build outputs unset on Linux", input: "\n", goos: "linux", wantPlatform: PlatformAndroid},
-		{name: "build outputs unset on macOS", input: "\n", goos: "darwin", wantPlatform: PlatformIOS},
-		{name: "only the apk is set", input: "app-debug.apk\n", goos: "darwin", wantApp: apk, wantPlatform: PlatformAndroid},
-		{name: "only the app is set", input: "\nRunner.app", goos: "linux", wantApp: app, wantPlatform: PlatformIOS},
-		{name: "both set on Linux", input: "app-debug.apk\nRunner.app", goos: "linux", wantApp: apk, wantPlatform: PlatformAndroid},
-		{name: "both set on macOS", input: "app-debug.apk\nRunner.app", goos: "darwin", wantApp: app, wantPlatform: PlatformIOS},
-		{name: "both set, platform passed to Maestro", input: "app-debug.apk\nRunner.app", args: []string{"-p", "android"}, goos: "darwin", wantApp: apk, wantPlatform: PlatformAndroid},
-		{name: "platform passed to Maestro wins over the host", args: []string{"--platform", "ios"}, goos: "linux", wantPlatform: PlatformIOS},
-		{name: "user override", input: "custom/My App.apk", goos: "linux", wantApp: App{Path: "custom/My App.apk", Platform: PlatformAndroid}, wantPlatform: PlatformAndroid},
+		{name: "build outputs unset", input: "\n", goos: "linux", want: App{}},
+		{name: "only the apk is set", input: "app-debug.apk\n", goos: "darwin", want: apk},
+		{name: "only the app is set", input: "\nRunner.app", goos: "linux", want: app},
+		{name: "both set on Linux", input: "app-debug.apk\nRunner.app", goos: "linux", want: apk},
+		{name: "both set on macOS", input: "app-debug.apk\nRunner.app", goos: "darwin", want: app},
+		{name: "user override", input: "custom/My App.apk", goos: "linux", want: App{Path: "custom/My App.apk", Platform: PlatformAndroid}},
 		{name: "unsupported file", input: "app-debug.apk\nRunner.ipa", goos: "darwin", wantErr: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotApp, gotPlatform, err := resolveTarget(tt.input, tt.args, tt.goos)
+			got, err := resolveApp(tt.input, tt.goos)
 			if tt.wantErr {
 				require.Error(t, err)
 				return
 			}
 			require.NoError(t, err)
-			assert.Equal(t, tt.wantApp, gotApp)
-			assert.Equal(t, tt.wantPlatform, gotPlatform)
+			assert.Equal(t, tt.want, got)
 		})
 	}
 }
@@ -137,22 +131,8 @@ func TestTestArgs_Device(t *testing.T) {
 	}, testArgs(Config{FlowPaths: []string{".maestro"}}, result, "emulator-5554"))
 }
 
-func TestPlatformArg(t *testing.T) {
-	tests := []struct {
-		args       []string
-		want       Platform
-		wantPassed bool
-	}{
-		{args: []string{"-e", "A=b", "--platform", "iOS"}, want: PlatformIOS, wantPassed: true},
-		{args: []string{"--platform=android"}, want: PlatformAndroid, wantPassed: true},
-		{args: []string{"-p", "android"}, want: PlatformAndroid, wantPassed: true},
-		{args: []string{"--platform", "web"}, want: PlatformUnknown, wantPassed: true},
-		{args: []string{"--platform"}, want: PlatformUnknown, wantPassed: true},
-		{args: []string{"-e", "PLATFORM=ios"}, want: PlatformUnknown, wantPassed: false},
-	}
-	for _, tt := range tests {
-		platform, passed := platformArg(tt.args)
-		assert.Equal(t, tt.want, platform, tt.args)
-		assert.Equal(t, tt.wantPassed, passed, tt.args)
-	}
+func TestResolvePlatform(t *testing.T) {
+	assert.Equal(t, PlatformAndroid, resolvePlatform(App{Platform: PlatformAndroid}, "darwin"))
+	assert.Equal(t, PlatformIOS, resolvePlatform(App{}, "darwin"))
+	assert.Equal(t, PlatformAndroid, resolvePlatform(App{}, "linux"))
 }

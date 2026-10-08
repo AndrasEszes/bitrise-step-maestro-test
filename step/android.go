@@ -43,18 +43,16 @@ type androidDevices struct {
 	androidHome    string
 	adb            string
 	serialHint     string
-	systemImage    string
 	deployDir      string
 }
 
-func newAndroidDevices(logger log.Logger, commandFactory command.Factory, androidHome, serialHint, systemImage, deployDir string) androidDevices {
+func newAndroidDevices(logger log.Logger, commandFactory command.Factory, androidHome, serialHint, deployDir string) androidDevices {
 	return androidDevices{
 		logger:         logger,
 		commandFactory: commandFactory,
 		androidHome:    androidHome,
 		adb:            adbPath(androidHome),
 		serialHint:     serialHint,
-		systemImage:    systemImage,
 		deployDir:      deployDir,
 	}
 }
@@ -72,6 +70,11 @@ func adbPath(androidHome string) string {
 }
 
 func (a androidDevices) acquire() (Device, error) {
+	sdkModel, adb, err := a.sdk()
+	if err != nil {
+		return Device{}, err
+	}
+
 	running, err := a.runningDevices()
 	if err != nil {
 		return Device{}, err
@@ -89,24 +92,19 @@ func (a androidDevices) acquire() (Device, error) {
 		} else {
 			a.logger.Printf("Using the running device: %s", serial)
 		}
-		if err := a.waitForDevice(serial); err != nil {
+		if err := adb.WaitForDevice(serial, androidBootTimeout); err != nil {
 			return Device{}, err
 		}
 		return Device{ID: serial}, nil
 	}
 
 	a.logger.Printf("No running device, booting an emulator")
-	sdkModel, adb, err := a.sdk()
-	if err != nil {
-		return Device{}, err
-	}
 	return a.boot(sdkModel, adb)
 }
 
-// sdk returns the Android SDK and adbmanager, which booting an emulator needs. A device that already runs needs neither.
 func (a androidDevices) sdk() (*sdk.Model, *adbmanager.Model, error) {
 	if a.androidHome == "" {
-		return nil, nil, errors.New("ANDROID_HOME is not set, the Android SDK is needed to boot an emulator")
+		return nil, nil, errors.New("ANDROID_HOME is not set, the Step needs the Android SDK")
 	}
 	sdkModel, err := sdk.New(a.androidHome, pathutil.NewPathChecker())
 	if err != nil {
@@ -119,25 +117,21 @@ func (a androidDevices) sdk() (*sdk.Model, *adbmanager.Model, error) {
 	return sdkModel, adb, nil
 }
 
-func (a androidDevices) waitForDevice(serial string) error {
-	_, adb, err := a.sdk()
-	if err != nil {
-		a.logger.Warnf("Not waiting for %s to finish booting: %s", serial, err)
-		return nil
-	}
-	return adb.WaitForDevice(serial, androidBootTimeout)
-}
-
 func (a androidDevices) boot(sdkModel *sdk.Model, adb *adbmanager.Model) (Device, error) {
 	cmdlineToolsPath, err := sdkModel.CmdlineToolsPath()
 	if err != nil {
 		return Device{}, err
 	}
 
-	image, err := a.resolveSystemImage(filepath.Join(cmdlineToolsPath, "sdkmanager"))
+	installed, err := installedSystemImages(a.androidHome)
 	if err != nil {
 		return Device{}, err
 	}
+	image, err := selectSystemImage(installed, hostABI(runtime.GOARCH))
+	if err != nil {
+		return Device{}, err
+	}
+	a.logger.Printf("System image: %s (newest preinstalled)", image)
 	if err := a.createAVD(filepath.Join(cmdlineToolsPath, "avdmanager"), image); err != nil {
 		return Device{}, err
 	}
@@ -164,39 +158,6 @@ func (a androidDevices) boot(sdkModel *sdk.Model, adb *adbmanager.Model) (Device
 		a.logger.Warnf("Remove emulator log: %s", err)
 	}
 	return Device{ID: emulator.serial, Release: release, HintEnv: emulatorSerialEnv, HintValue: emulator.serial}, nil
-}
-
-func (a androidDevices) resolveSystemImage(sdkManagerPath string) (string, error) {
-	installed, err := installedSystemImages(a.androidHome)
-	if err != nil {
-		return "", err
-	}
-
-	if a.systemImage == "" {
-		image, err := selectSystemImage(installed, hostABI(runtime.GOARCH))
-		if err != nil {
-			return "", err
-		}
-		a.logger.Printf("System image: %s (newest preinstalled)", image)
-		return image, nil
-	}
-
-	a.logger.Printf("System image: %s", a.systemImage)
-	if slices.Contains(installed, a.systemImage) {
-		return a.systemImage, nil
-	}
-
-	cmd := a.commandFactory.Create(sdkManagerPath, []string{"--verbose", a.systemImage}, &command.Opts{
-		Stdin: strings.NewReader(strings.Repeat("y\n", 20)),
-	})
-	a.logger.Printf("The system image is not preinstalled, installing it")
-	a.logger.TDonef("$ %s", cmd.PrintableCommandArgs())
-	start := time.Now()
-	if out, err := cmd.RunAndReturnTrimmedCombinedOutput(); err != nil {
-		return "", fmt.Errorf("install system image %s: %w\n%s", a.systemImage, err, out)
-	}
-	a.logger.Printf("Installed in %s", time.Since(start).Round(time.Second))
-	return a.systemImage, nil
 }
 
 func (a androidDevices) createAVD(avdManagerPath, image string) error {
@@ -385,7 +346,7 @@ func selectSystemImage(installed []string, abi string) (string, error) {
 			return best, nil
 		}
 	}
-	return "", fmt.Errorf("no preinstalled %s system image (%s) in the Android SDK: set android_system_image, or start an emulator before this Step", abi, strings.Join(preferredSystemImageTags, ", "))
+	return "", fmt.Errorf("no preinstalled %s system image (%s) in the Android SDK: start an emulator before this Step, for example with AVD Manager", abi, strings.Join(preferredSystemImageTags, ", "))
 }
 
 func hostABI(goarch string) string {
@@ -393,15 +354,4 @@ func hostABI(goarch string) string {
 		return "arm64-v8a"
 	}
 	return "x86_64"
-}
-
-func validateSystemImage(image string) error {
-	if image == "" {
-		return nil
-	}
-	parts := strings.Split(image, ";")
-	if len(parts) != 4 || parts[0] != systemImagePrefix {
-		return fmt.Errorf("android_system_image must look like system-images;android-<API level>;<tag>;<ABI>, got: %s", image)
-	}
-	return nil
 }
