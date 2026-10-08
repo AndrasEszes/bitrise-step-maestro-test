@@ -19,13 +19,17 @@ import (
 )
 
 const (
-	androidBootTimeout     = 10 * time.Minute
-	emulatorCheckInterval  = 5 * time.Second
-	emulatorStopTimeout    = time.Minute
 	avdName                = "bitrise_maestro"
 	avdDeviceProfile       = "pixel"
 	systemImagePrefix      = "system-images"
 	ps16kSystemImageSuffix = "_ps16k"
+)
+
+// Overridden in tests.
+var (
+	androidBootTimeout    = 10 * time.Minute
+	emulatorCheckInterval = 5 * time.Second
+	emulatorStopTimeout   = time.Minute
 )
 
 // The first tag with an image for the host ABI wins, then the highest API level within it.
@@ -40,9 +44,10 @@ type androidDevices struct {
 	adb            string
 	serialHint     string
 	systemImage    string
+	deployDir      string
 }
 
-func newAndroidDevices(logger log.Logger, commandFactory command.Factory, androidHome, serialHint, systemImage string) androidDevices {
+func newAndroidDevices(logger log.Logger, commandFactory command.Factory, androidHome, serialHint, systemImage, deployDir string) androidDevices {
 	return androidDevices{
 		logger:         logger,
 		commandFactory: commandFactory,
@@ -50,6 +55,7 @@ func newAndroidDevices(logger log.Logger, commandFactory command.Factory, androi
 		adb:            adbPath(androidHome),
 		serialHint:     serialHint,
 		systemImage:    systemImage,
+		deployDir:      deployDir,
 	}
 }
 
@@ -145,13 +151,17 @@ func (a androidDevices) boot(sdkModel *sdk.Model, adb *adbmanager.Model) (Device
 
 	if err := adb.WaitForDevice(emulator.serial, androidBootTimeout-time.Since(start)); err != nil {
 		release()
-		return Device{}, err
+		return Device{}, fmt.Errorf("%w, emulator log: %s", err, emulator.logPath)
 	}
 	a.logger.Donef("Emulator %s booted in %s", emulator.serial, time.Since(start).Round(time.Second))
 
 	if err := a.disableAnimations(emulator.serial); err != nil {
 		release()
 		return Device{}, err
+	}
+	// The log only helps when the boot fails; once it succeeded it would just pile up among the deployed artifacts.
+	if err := os.Remove(emulator.logPath); err != nil {
+		a.logger.Warnf("Remove emulator log: %s", err)
 	}
 	return Device{ID: emulator.serial, Release: release, HintEnv: emulatorSerialEnv, HintValue: emulator.serial}, nil
 }
@@ -216,8 +226,10 @@ type runningEmulator struct {
 	logPath string
 }
 
+// startEmulator writes the emulator output to the deploy directory, so that it is still there to read after a failed
+// build.
 func (a androidDevices) startEmulator() (runningEmulator, error) {
-	logFile, err := os.CreateTemp("", "emulator-*.log")
+	logFile, err := os.CreateTemp(a.deployDir, "emulator-*.log")
 	if err != nil {
 		return runningEmulator{}, err
 	}
