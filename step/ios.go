@@ -22,6 +22,8 @@ const (
 	defaultSimulatorDestination = "platform=iOS Simulator,name=Bitrise iOS default,OS=latest"
 	iosRuntimePrefix            = "com.apple.CoreSimulator.SimRuntime.iOS-"
 	simulatorShutdownState      = "Shutdown"
+	simulatorBootedState        = "Booted"
+	simulatorBootingState       = "Booting"
 )
 
 type iosDevices struct {
@@ -83,11 +85,17 @@ func (i iosDevices) useDestination(dest string) (Device, error) {
 	}
 	i.logger.Printf("Simulator: %s, %s, %s (%s)", device.Name, device.OS, device.UDID, device.State)
 
-	if device.State != simulatorShutdownState {
+	if isRunningSimulator(device.State) {
 		if err := i.waitUntilBooted(device.UDID, iosBootTimeout); err != nil {
 			return Device{}, err
 		}
 		return Device{ID: device.UDID}, nil
+	}
+	if device.State != simulatorShutdownState {
+		// A simulator that is shutting down cannot be booted until it is shut down.
+		if err := i.simulatorManager.Shutdown(device.UDID); err != nil {
+			return Device{}, err
+		}
 	}
 
 	start := time.Now()
@@ -139,7 +147,8 @@ func (i iosDevices) waitUntilBooted(udid string, timeout time.Duration) error {
 	}
 }
 
-// runningSimulators counts Booting simulators as running too, so the step never boots a second one next to them.
+// runningSimulators counts Booting simulators as running too, so the step never boots a second one next to them. A
+// simulator that is shutting down is not running: waiting for it to boot would never end.
 func runningSimulators(list *destination.DeviceList) []string {
 	var udids []string
 	for _, runtimeID := range slices.Sorted(maps.Keys(list.Devices)) {
@@ -147,10 +156,14 @@ func runningSimulators(list *destination.DeviceList) []string {
 			continue
 		}
 		for _, device := range list.Devices[runtimeID] {
-			if device.State != simulatorShutdownState {
+			if isRunningSimulator(device.State) {
 				udids = append(udids, device.UDID)
 			}
 		}
 	}
 	return udids
+}
+
+func isRunningSimulator(state string) bool {
+	return state == simulatorBootedState || state == simulatorBootingState
 }

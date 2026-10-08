@@ -154,6 +154,7 @@ func TestRunningSimulators(t *testing.T) {
 		},
 		"com.apple.CoreSimulator.SimRuntime.iOS-18-6": {
 			{UDID: "booting", State: "Booting"},
+			{UDID: "shutting-down", State: "Shutting Down"},
 		},
 		"com.apple.CoreSimulator.SimRuntime.watchOS-26-5": {
 			{UDID: "watch", State: "Booted"},
