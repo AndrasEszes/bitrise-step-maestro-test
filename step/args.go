@@ -37,39 +37,37 @@ func parseApp(pth string) (App, error) {
 	}
 }
 
-// When app_path yields both an .apk and an .app, the host decides: Bitrise runs Android
-// emulators on Linux and iOS simulators on macOS.
-func resolveApp(input string, goos string) (App, error) {
+// resolveTarget decides the platform first, then the app for it: when app_path yields both an .apk and an .app, the one
+// for that platform is installed. A platform passed to maestro test wins, because Maestro runs the flows only on that
+// platform. Then an app of a single platform decides, then the host: Bitrise runs Android emulators on Linux and iOS
+// simulators on macOS.
+func resolveTarget(appInput string, additionalArgs []string, goos string) (App, Platform, error) {
 	var apps []App
-	for _, pth := range splitLines(input) {
+	for _, pth := range splitLines(appInput) {
 		app, err := parseApp(pth)
 		if err != nil {
-			return App{}, err
+			return App{}, PlatformUnknown, err
 		}
 		apps = append(apps, app)
 	}
-	if len(apps) == 0 {
-		return App{}, nil
+
+	platform, _ := platformArg(additionalArgs)
+	if platform == PlatformUnknown && len(apps) == 1 {
+		platform = apps[0].Platform
+	}
+	if platform == PlatformUnknown {
+		platform = hostPlatform(goos)
 	}
 
-	preferred := hostPlatform(goos)
 	for _, app := range apps {
-		if app.Platform == preferred {
-			return app, nil
+		if app.Platform == platform {
+			return app, platform, nil
 		}
 	}
-	return apps[0], nil
-}
-
-// resolvePlatform puts a platform passed to maestro test first, because Maestro runs the flows only on that platform.
-func resolvePlatform(app App, additionalArgs []string, goos string) Platform {
-	if platform, _ := platformArg(additionalArgs); platform != PlatformUnknown {
-		return platform
+	if len(apps) > 0 {
+		return apps[0], platform, nil
 	}
-	if app.Platform != PlatformUnknown {
-		return app.Platform
-	}
-	return hostPlatform(goos)
+	return App{}, platform, nil
 }
 
 // platformArg returns the platform passed to maestro test, and whether one was passed at all: a platform the step has

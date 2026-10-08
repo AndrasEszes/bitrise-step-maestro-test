@@ -115,14 +115,14 @@ func configFromInput(input Input) (Config, error) {
 		return Config{}, fmt.Errorf("flow_path: no flow file or folder given")
 	}
 
-	app, err := resolveApp(input.AppPath, runtime.GOOS)
-	if err != nil {
-		return Config{}, err
-	}
-
 	additionalArgs, err := splitArgs(input.AdditionalArgs)
 	if err != nil {
 		return Config{}, fmt.Errorf("additional_args: %w", err)
+	}
+
+	app, platform, err := resolveTarget(input.AppPath, additionalArgs, runtime.GOOS)
+	if err != nil {
+		return Config{}, err
 	}
 
 	maestroVersion, err := resolveMaestroVersion(input.MaestroVersion)
@@ -138,7 +138,7 @@ func configFromInput(input Input) (Config, error) {
 	return Config{
 		FlowPaths:          flowPaths,
 		App:                app,
-		Platform:           resolvePlatform(app, additionalArgs, runtime.GOOS),
+		Platform:           platform,
 		ManageDevice:       managesDevice(additionalArgs),
 		AndroidSystemImage: androidSystemImage,
 		ShutdownDevice:     input.ShutdownDevice,
