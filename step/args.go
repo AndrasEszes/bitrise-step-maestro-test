@@ -52,16 +52,27 @@ func resolveApp(input string, goos string) (App, error) {
 		return App{}, nil
 	}
 
-	preferred := PlatformAndroid
-	if goos == "darwin" {
-		preferred = PlatformIOS
-	}
+	preferred := hostPlatform(goos)
 	for _, app := range apps {
 		if app.Platform == preferred {
 			return app, nil
 		}
 	}
 	return apps[0], nil
+}
+
+func resolvePlatform(app App, goos string) Platform {
+	if app.Platform != PlatformUnknown {
+		return app.Platform
+	}
+	return hostPlatform(goos)
+}
+
+func hostPlatform(goos string) Platform {
+	if goos == "darwin" {
+		return PlatformIOS
+	}
+	return PlatformAndroid
 }
 
 func splitList(input string) []string {
@@ -91,8 +102,11 @@ func splitArgs(input string) ([]string, error) {
 	return shellquote.Split(input)
 }
 
-func testArgs(config Config, result Result) []string {
+func testArgs(config Config, result Result, deviceID string) []string {
 	args := []string{"test", "--format", "junit", "--output", result.JUnitPath, "--test-output-dir", result.TestOutputDir}
+	if deviceID != "" {
+		args = append(args, "--device", deviceID)
+	}
 	if len(config.IncludeTags) > 0 {
 		args = append(args, "--include-tags", strings.Join(config.IncludeTags, ","))
 	}
@@ -103,9 +117,18 @@ func testArgs(config Config, result Result) []string {
 	return append(args, config.FlowPaths...)
 }
 
-func installAppCommand(app App) (string, []string) {
+func installAppCommand(app App, deviceID, androidHome string) (string, []string) {
 	if app.Platform == PlatformAndroid {
-		return "adb", []string{"install", "-r", app.Path}
+		var args []string
+		if deviceID != "" {
+			args = append(args, "-s", deviceID)
+		}
+		return adbPath(androidHome), append(args, "install", "-r", app.Path)
 	}
-	return "xcrun", []string{"simctl", "install", "booted", app.Path}
+
+	target := "booted"
+	if deviceID != "" {
+		target = deviceID
+	}
+	return "xcrun", []string{"simctl", "install", target, app.Path}
 }

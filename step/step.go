@@ -35,13 +35,18 @@ type Input struct {
 	AdditionalArgs string `env:"additional_args"`
 	TestName       string `env:"test_name,required"`
 	MaestroVersion string `env:"maestro_version"`
+	ShutdownDevice bool   `env:"shutdown_device,opt[yes,no]"`
 	TestResultDir  string `env:"bitrise_test_result_dir,dir"`
 	DeployDir      string `env:"BITRISE_DEPLOY_DIR"`
+	AndroidHome    string `env:"ANDROID_HOME"`
 }
 
 type Config struct {
 	FlowPaths      []string
 	App            App
+	Platform       Platform
+	ManageDevice   bool
+	ShutdownDevice bool
 	IncludeTags    []string
 	ExcludeTags    []string
 	AdditionalArgs []string
@@ -49,6 +54,7 @@ type Config struct {
 	MaestroVersion maestroVersion
 	TestResultDir  string
 	DeployDir      string
+	AndroidHome    string
 }
 
 type Result struct {
@@ -68,6 +74,7 @@ type Step struct {
 	installer      Installer
 	exporter       Exporter
 	fileManager    fileutil.FileManager
+	devices        DeviceManager
 }
 
 func New(
@@ -77,6 +84,7 @@ func New(
 	installer Installer,
 	exporter Exporter,
 	fileManager fileutil.FileManager,
+	devices DeviceManager,
 ) Step {
 	return Step{
 		logger:         logger,
@@ -85,6 +93,7 @@ func New(
 		installer:      installer,
 		exporter:       exporter,
 		fileManager:    fileManager,
+		devices:        devices,
 	}
 }
 
@@ -105,14 +114,14 @@ func configFromInput(input Input) (Config, error) {
 		return Config{}, fmt.Errorf("flow_path: no flow file or folder given")
 	}
 
-	app, err := resolveApp(input.AppPath, runtime.GOOS)
-	if err != nil {
-		return Config{}, err
-	}
-
 	additionalArgs, err := splitArgs(input.AdditionalArgs)
 	if err != nil {
 		return Config{}, fmt.Errorf("additional_args: %w", err)
+	}
+
+	app, err := resolveApp(input.AppPath, runtime.GOOS)
+	if err != nil {
+		return Config{}, err
 	}
 
 	maestroVersion, err := resolveMaestroVersion(input.MaestroVersion)
@@ -123,6 +132,9 @@ func configFromInput(input Input) (Config, error) {
 	return Config{
 		FlowPaths:      flowPaths,
 		App:            app,
+		Platform:       resolvePlatform(app, runtime.GOOS),
+		ManageDevice:   !hasDeviceArg(additionalArgs),
+		ShutdownDevice: input.ShutdownDevice,
 		IncludeTags:    splitList(input.IncludeTags),
 		ExcludeTags:    splitList(input.ExcludeTags),
 		AdditionalArgs: additionalArgs,
@@ -130,6 +142,7 @@ func configFromInput(input Input) (Config, error) {
 		MaestroVersion: maestroVersion,
 		TestResultDir:  input.TestResultDir,
 		DeployDir:      input.DeployDir,
+		AndroidHome:    input.AndroidHome,
 	}, nil
 }
 
@@ -143,7 +156,27 @@ func (s Step) InstallDependencies(config Config) (Installation, error) {
 }
 
 func (s Step) Run(config Config, installation Installation) (Result, error) {
-	if err := s.installApp(config); err != nil {
+	var device Device
+	if config.ManageDevice {
+		s.logger.Println()
+		s.logger.Infof("Preparing the %s device", config.Platform)
+		var err error
+		if device, err = s.devices.Acquire(config); err != nil {
+			return Result{}, fmt.Errorf("prepare device: %w", err)
+		}
+	}
+	if device.Release != nil {
+		if config.ShutdownDevice {
+			defer device.Release()
+		} else if err := s.exporter.ExportOutput(device.HintEnv, device.HintValue); err != nil {
+			s.logger.Warnf("Failed to export %s, shutting the device down at the end: %s", device.HintEnv, err)
+			defer device.Release()
+		} else {
+			s.logger.Printf("Leaving the device running, %s: %s", device.HintEnv, device.HintValue)
+		}
+	}
+
+	if err := s.installApp(config, device.ID); err != nil {
 		return Result{}, err
 	}
 
@@ -156,7 +189,7 @@ func (s Step) Run(config Config, installation Installation) (Result, error) {
 		TestOutputDir: filepath.Join(workDir, testOutputDirectoryName),
 	}
 
-	args := testArgs(config, result)
+	args := testArgs(config, result, device.ID)
 	cmd := s.commandFactory.Create(installation.BinaryPath, args, &command.Opts{
 		Stdout: os.Stdout,
 		Stderr: os.Stderr,
@@ -200,12 +233,12 @@ func (s Step) ExportOutputs(config Config, result Result) error {
 	return nil
 }
 
-func (s Step) installApp(config Config) error {
+func (s Step) installApp(config Config, deviceID string) error {
 	if config.App.Path == "" {
 		return nil
 	}
 
-	name, args := installAppCommand(config.App)
+	name, args := installAppCommand(config.App, deviceID, config.AndroidHome)
 	cmd := s.commandFactory.Create(name, args, &command.Opts{Stdout: os.Stdout, Stderr: os.Stderr})
 	s.logger.Println()
 	s.logger.Infof("Installing app")

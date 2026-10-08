@@ -1,13 +1,18 @@
-# github.com/bitrise-io/go-android/v2 v2.0.0-alpha.18
+# github.com/bitrise-io/go-android/v2 v2.0.0-alpha.19
 ## explicit; go 1.22
+github.com/bitrise-io/go-android/v2/adbmanager
+github.com/bitrise-io/go-android/v2/sdk
 github.com/bitrise-io/go-android/v2/testresult/junitxml
-# github.com/bitrise-io/go-steputils/v2 v2.0.0-alpha.58
+# github.com/bitrise-io/go-steputils/v2 v2.0.0-alpha.61
 ## explicit; go 1.21
 github.com/bitrise-io/go-steputils/v2/export
 github.com/bitrise-io/go-steputils/v2/stepconf
 github.com/bitrise-io/go-steputils/v2/testasset
 github.com/bitrise-io/go-steputils/v2/testreport
 github.com/bitrise-io/go-steputils/v2/testresultexport
+# github.com/bitrise-io/go-utils v1.0.15
+## explicit; go 1.13
+github.com/bitrise-io/go-utils/errorutil
 # github.com/bitrise-io/go-utils/v2 v2.0.0-alpha.39
 ## explicit; go 1.21
 github.com/bitrise-io/go-utils/v2/command
@@ -20,8 +25,14 @@ github.com/bitrise-io/go-utils/v2/log
 github.com/bitrise-io/go-utils/v2/log/colorstring
 github.com/bitrise-io/go-utils/v2/parseutil
 github.com/bitrise-io/go-utils/v2/pathutil
+github.com/bitrise-io/go-utils/v2/retry
 github.com/bitrise-io/go-utils/v2/retryhttp
 github.com/bitrise-io/go-utils/v2/ziputil
+# github.com/bitrise-io/go-xcode/v2 v2.0.0-alpha.88
+## explicit; go 1.22
+github.com/bitrise-io/go-xcode/v2/destination
+github.com/bitrise-io/go-xcode/v2/simulator
+github.com/bitrise-io/go-xcode/v2/xcodeversion
 # github.com/hashicorp/go-cleanhttp v0.5.2
 ## explicit; go 1.13
 github.com/hashicorp/go-cleanhttp
@@ -44,3 +55,5 @@ github.com/stretchr/testify/require
 # go.yaml.in/yaml/v3 v3.0.5
 ## explicit; go 1.16
 go.yaml.in/yaml/v3
+# golang.org/x/sys v0.30.0
+## explicit; go 1.18
