@@ -34,6 +34,22 @@ func TestInstallAppCommand_UsesTheSDKAdb(t *testing.T) {
 	assert.Equal(t, "adb", name, "adb on PATH when the SDK has none")
 }
 
+func TestAcquire_RunningEmulatorWithoutSDK(t *testing.T) {
+	fakeOnPath(t, "adb", "printf 'List of devices attached\\nemulator-5554\\tdevice\\n'\n")
+
+	device, err := testAndroidDevices("").acquire()
+	require.NoError(t, err)
+	assert.Equal(t, "emulator-5554", device.ID)
+	assert.Nil(t, device.Release, "a device the step found is never shut down")
+}
+
+func TestAcquire_BootingWithoutSDK(t *testing.T) {
+	fakeOnPath(t, "adb", "printf 'List of devices attached\\n'\n")
+
+	_, err := testAndroidDevices("").acquire()
+	require.ErrorContains(t, err, "ANDROID_HOME")
+}
+
 func testAndroidDevices(androidHome string) androidDevices {
 	return newAndroidDevices(log.NewLogger(), command.NewFactory(env.NewRepository()), androidHome, "", "")
 }

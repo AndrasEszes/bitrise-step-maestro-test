@@ -66,15 +66,6 @@ func adbPath(androidHome string) string {
 }
 
 func (a androidDevices) acquire() (Device, error) {
-	sdkModel, err := sdk.New(a.androidHome, pathutil.NewPathChecker())
-	if err != nil {
-		return Device{}, fmt.Errorf("init Android SDK: %w", err)
-	}
-	adb, err := adbmanager.New(sdkModel, a.commandFactory, a.logger)
-	if err != nil {
-		return Device{}, err
-	}
-
 	running, err := a.runningDevices()
 	if err != nil {
 		return Device{}, err
@@ -92,14 +83,43 @@ func (a androidDevices) acquire() (Device, error) {
 		} else {
 			a.logger.Printf("Using the running device: %s", serial)
 		}
-		if err := adb.WaitForDevice(serial, androidBootTimeout); err != nil {
+		if err := a.waitForDevice(serial); err != nil {
 			return Device{}, err
 		}
 		return Device{ID: serial}, nil
 	}
 
 	a.logger.Printf("No running device, booting an emulator")
+	sdkModel, adb, err := a.sdk()
+	if err != nil {
+		return Device{}, err
+	}
 	return a.boot(sdkModel, adb)
+}
+
+// sdk returns the Android SDK and adbmanager, which booting an emulator needs. A device that already runs needs neither.
+func (a androidDevices) sdk() (*sdk.Model, *adbmanager.Model, error) {
+	if a.androidHome == "" {
+		return nil, nil, errors.New("ANDROID_HOME is not set, the Android SDK is needed to boot an emulator")
+	}
+	sdkModel, err := sdk.New(a.androidHome, pathutil.NewPathChecker())
+	if err != nil {
+		return nil, nil, fmt.Errorf("init Android SDK (ANDROID_HOME: %s): %w", a.androidHome, err)
+	}
+	adb, err := adbmanager.New(sdkModel, a.commandFactory, a.logger)
+	if err != nil {
+		return nil, nil, err
+	}
+	return sdkModel, adb, nil
+}
+
+func (a androidDevices) waitForDevice(serial string) error {
+	_, adb, err := a.sdk()
+	if err != nil {
+		a.logger.Warnf("Not waiting for %s to finish booting: %s", serial, err)
+		return nil
+	}
+	return adb.WaitForDevice(serial, androidBootTimeout)
 }
 
 func (a androidDevices) boot(sdkModel *sdk.Model, adb *adbmanager.Model) (Device, error) {
