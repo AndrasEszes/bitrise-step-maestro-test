@@ -132,7 +132,18 @@ func TestTestArgs_Device(t *testing.T) {
 }
 
 func TestResolvePlatform(t *testing.T) {
-	assert.Equal(t, PlatformAndroid, resolvePlatform(App{Platform: PlatformAndroid}, "darwin"))
-	assert.Equal(t, PlatformIOS, resolvePlatform(App{}, "darwin"))
-	assert.Equal(t, PlatformAndroid, resolvePlatform(App{}, "linux"))
+	assert.Equal(t, PlatformAndroid, resolvePlatform(App{Platform: PlatformAndroid}, nil, "darwin"))
+	assert.Equal(t, PlatformIOS, resolvePlatform(App{}, nil, "darwin"))
+	assert.Equal(t, PlatformAndroid, resolvePlatform(App{}, nil, "linux"))
+	assert.Equal(t, PlatformIOS, resolvePlatform(App{}, []string{"--platform", "ios"}, "linux"), "the platform passed to Maestro wins over the host")
+	assert.Equal(t, PlatformAndroid, resolvePlatform(App{Platform: PlatformIOS}, []string{"-p", "android"}, "darwin"), "and over the app")
+}
+
+func TestPlatformArg(t *testing.T) {
+	assert.Equal(t, PlatformIOS, platformArg([]string{"-e", "A=b", "--platform", "iOS"}))
+	assert.Equal(t, PlatformAndroid, platformArg([]string{"--platform=android"}))
+	assert.Equal(t, PlatformAndroid, platformArg([]string{"-p", "android"}))
+	assert.Equal(t, PlatformUnknown, platformArg([]string{"--platform", "web"}))
+	assert.Equal(t, PlatformUnknown, platformArg([]string{"--platform"}))
+	assert.Equal(t, PlatformUnknown, platformArg([]string{"-e", "PLATFORM=ios"}))
 }

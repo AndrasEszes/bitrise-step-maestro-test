@@ -61,11 +61,34 @@ func resolveApp(input string, goos string) (App, error) {
 	return apps[0], nil
 }
 
-func resolvePlatform(app App, goos string) Platform {
+// resolvePlatform puts a platform passed to maestro test first, because Maestro runs the flows only on that platform.
+func resolvePlatform(app App, additionalArgs []string, goos string) Platform {
+	if platform := platformArg(additionalArgs); platform != PlatformUnknown {
+		return platform
+	}
 	if app.Platform != PlatformUnknown {
 		return app.Platform
 	}
 	return hostPlatform(goos)
+}
+
+func platformArg(args []string) Platform {
+	for i, arg := range args {
+		name, value, hasValue := strings.Cut(arg, "=")
+		if name != "-p" && name != "--platform" {
+			continue
+		}
+		if !hasValue && i+1 < len(args) {
+			value = args[i+1]
+		}
+		switch strings.ToLower(value) {
+		case "android":
+			return PlatformAndroid
+		case "ios":
+			return PlatformIOS
+		}
+	}
+	return PlatformUnknown
 }
 
 func hostPlatform(goos string) Platform {

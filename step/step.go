@@ -138,7 +138,7 @@ func configFromInput(input Input) (Config, error) {
 	return Config{
 		FlowPaths:          flowPaths,
 		App:                app,
-		Platform:           resolvePlatform(app, runtime.GOOS),
+		Platform:           resolvePlatform(app, additionalArgs, runtime.GOOS),
 		ManageDevice:       !hasDeviceArg(additionalArgs),
 		AndroidSystemImage: androidSystemImage,
 		ShutdownDevice:     input.ShutdownDevice,
