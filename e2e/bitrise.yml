@@ -30,6 +30,62 @@ workflows:
         - test_name: $TEST_NAME
     after_run:
     - _verify_outputs
+    - _verify_android_device_kept
+
+  test_android_self_managed_device:
+    steps:
+    - bitrise-run@0:
+        run_if: |-
+          {{ or (envcontain "BITRISEIO_STACK_ID" "ubuntu") (not .IsCI) }}
+        inputs:
+        - workflow_id: utility_test_android_self_managed_device
+        - bitrise_config_path: ./e2e/bitrise.yml
+
+  utility_test_android_self_managed_device:
+    envs:
+    - TEST_NAME: Maestro Android self-managed
+    - BITRISE_EMULATOR_SERIAL: ""
+    before_run:
+    - _download_samples
+    - _shut_down_android_devices
+    steps:
+    - path::./:
+        title: Execute step
+        inputs:
+        - app_path: $SAMPLES_DIR/wikipedia.apk
+        - flow_path: $SAMPLES_DIR/android-flow.yaml
+        - test_name: $TEST_NAME
+    after_run:
+    - _verify_outputs
+    - _verify_android_device_shut_down
+
+  test_android_16k_page_size_image:
+    steps:
+    - bitrise-run@0:
+        run_if: |-
+          {{ or (envcontain "BITRISEIO_STACK_ID" "ubuntu") (not .IsCI) }}
+        inputs:
+        - workflow_id: utility_test_android_16k_page_size_image
+        - bitrise_config_path: ./e2e/bitrise.yml
+
+  utility_test_android_16k_page_size_image:
+    envs:
+    - TEST_NAME: Maestro Android 16 KB page size
+    - BITRISE_EMULATOR_SERIAL: ""
+    before_run:
+    - _download_samples
+    - _shut_down_android_devices
+    steps:
+    - path::./:
+        title: Execute step
+        inputs:
+        - app_path: $SAMPLES_DIR/wikipedia.apk
+        - flow_path: $SAMPLES_DIR/android-flow.yaml
+        - test_name: $TEST_NAME
+        - android_system_image: system-images;android-37.0;google_apis_ps16k;x86_64
+    after_run:
+    - _verify_outputs
+    - _verify_android_device_shut_down
 
   test_android_failing_flow_exports_results:
     steps:
@@ -112,6 +168,41 @@ workflows:
         - test_name: $TEST_NAME
     after_run:
     - _verify_outputs
+    - _verify_ios_device_kept
+
+  test_ios_self_managed_device:
+    steps:
+    - bitrise-run@0:
+        run_if: |-
+          {{ or (envcontain "BITRISEIO_STACK_ID" "osx") (not .IsCI) }}
+        inputs:
+        - workflow_id: utility_test_ios_self_managed_device
+        - bitrise_config_path: ./e2e/bitrise.yml
+
+  utility_test_ios_self_managed_device:
+    envs:
+    - TEST_NAME: Maestro iOS self-managed
+    - BITRISE_XCODE_DESTINATION: ""
+    before_run:
+    - _download_samples
+    - _shut_down_ios_devices
+    steps:
+    - script@1:
+        title: Unzip sample app
+        inputs:
+        - content: |-
+            #!/usr/bin/env bash
+            set -euxo pipefail
+            unzip -q "$SAMPLES_DIR/wikipedia.zip" -d "$SAMPLES_DIR"
+    - path::./:
+        title: Execute step
+        inputs:
+        - app_path: $SAMPLES_DIR/Wikipedia.app
+        - flow_path: $SAMPLES_DIR/ios-flow.yaml
+        - test_name: $TEST_NAME
+    after_run:
+    - _verify_outputs
+    - _verify_ios_device_shut_down
 
   _download_samples:
     steps:
@@ -167,3 +258,76 @@ workflows:
             grep -o 'name="attachment_[0-9]*" value="[^"]*"' "$report" | sed 's/.*value="\(.*\)"/\1/' | while read -r attachment; do
               test -s "$test_run_dir/$attachment"
             done
+
+  _shut_down_android_devices:
+    steps:
+    - script@1:
+        title: Shut down running emulators
+        inputs:
+        - content: |-
+            #!/usr/bin/env bash
+            set -euxo pipefail
+            for serial in $(adb devices | tail -n +2 | cut -f1); do
+              adb -s "$serial" emu kill || true
+            done
+            for _ in $(seq 30); do
+              test -z "$(adb devices | tail -n +2 | grep -v '^$' || true)" && exit 0
+              sleep 2
+            done
+            exit 1
+
+  _shut_down_ios_devices:
+    steps:
+    - script@1:
+        title: Shut down running simulators
+        inputs:
+        - content: |-
+            #!/usr/bin/env bash
+            set -euxo pipefail
+            xcrun simctl shutdown all
+
+  _verify_android_device_kept:
+    steps:
+    - script@1:
+        title: Verify the emulator started before the Step still runs
+        is_always_run: true
+        inputs:
+        - content: |-
+            #!/usr/bin/env bash
+            set -euxo pipefail
+            adb devices | grep -q "^$BITRISE_EMULATOR_SERIAL[[:space:]]"
+            adb -s "$BITRISE_EMULATOR_SERIAL" emu kill
+
+  _verify_android_device_shut_down:
+    steps:
+    - script@1:
+        title: Verify the emulator the Step started is shut down
+        is_always_run: true
+        inputs:
+        - content: |-
+            #!/usr/bin/env bash
+            set -euxo pipefail
+            test -z "$(adb devices | tail -n +2 | grep -v '^$' || true)"
+
+  _verify_ios_device_kept:
+    steps:
+    - script@1:
+        title: Verify the simulator started before the Step still runs
+        is_always_run: true
+        inputs:
+        - content: |-
+            #!/usr/bin/env bash
+            set -euxo pipefail
+            xcrun simctl list devices booted | grep -q "(Booted)"
+            xcrun simctl shutdown all
+
+  _verify_ios_device_shut_down:
+    steps:
+    - script@1:
+        title: Verify the simulator the Step started is shut down
+        is_always_run: true
+        inputs:
+        - content: |-
+            #!/usr/bin/env bash
+            set -euxo pipefail
+            ! xcrun simctl list devices booted | grep -q "(Booted)"
