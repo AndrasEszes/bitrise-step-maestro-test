@@ -37,6 +37,7 @@ type Input struct {
 	TestName           string `env:"test_name,required"`
 	MaestroVersion     string `env:"maestro_version"`
 	AndroidSystemImage string `env:"android_system_image"`
+	ShutdownDevice     bool   `env:"shutdown_device,opt[yes,no]"`
 	TestResultDir      string `env:"bitrise_test_result_dir,dir"`
 	DeployDir          string `env:"BITRISE_DEPLOY_DIR"`
 }
@@ -47,6 +48,7 @@ type Config struct {
 	Platform           Platform
 	ManageDevice       bool
 	AndroidSystemImage string
+	ShutdownDevice     bool
 	IncludeTags        []string
 	ExcludeTags        []string
 	AdditionalArgs     []string
@@ -139,6 +141,7 @@ func configFromInput(input Input) (Config, error) {
 		Platform:           resolvePlatform(app, runtime.GOOS),
 		ManageDevice:       !hasDeviceArg(additionalArgs),
 		AndroidSystemImage: androidSystemImage,
+		ShutdownDevice:     input.ShutdownDevice,
 		IncludeTags:        splitList(input.IncludeTags),
 		ExcludeTags:        splitList(input.ExcludeTags),
 		AdditionalArgs:     additionalArgs,
@@ -159,7 +162,7 @@ func (s Step) InstallDependencies(config Config) (Installation, error) {
 }
 
 func (s Step) Run(config Config, installation Installation) (Result, error) {
-	device := Device{Release: func() {}}
+	var device Device
 	if config.ManageDevice {
 		s.logger.Println()
 		s.logger.Infof("Preparing the %s device", config.Platform)
@@ -168,7 +171,16 @@ func (s Step) Run(config Config, installation Installation) (Result, error) {
 			return Result{}, fmt.Errorf("prepare device: %w", err)
 		}
 	}
-	defer device.Release()
+	if device.Release != nil {
+		if config.ShutdownDevice {
+			defer device.Release()
+		} else if err := s.exporter.ExportOutput(device.HintEnv, device.HintValue); err != nil {
+			s.logger.Warnf("Failed to export %s, shutting the device down at the end: %s", device.HintEnv, err)
+			defer device.Release()
+		} else {
+			s.logger.Printf("Leaving the device running, %s: %s", device.HintEnv, device.HintValue)
+		}
+	}
 
 	if err := s.installApp(config, device.ID); err != nil {
 		return Result{}, err

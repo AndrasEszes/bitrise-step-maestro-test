@@ -80,7 +80,7 @@ func (a androidDevices) acquire() (Device, error) {
 		if err := adb.WaitForDevice(serial, androidBootTimeout); err != nil {
 			return Device{}, err
 		}
-		return Device{ID: serial, Release: func() {}}, nil
+		return Device{ID: serial}, nil
 	}
 
 	a.logger.Printf("No running device, booting an emulator")
@@ -118,7 +118,7 @@ func (a androidDevices) boot(sdkModel *sdk.Model, adb *adbmanager.Model) (Device
 		release()
 		return Device{}, err
 	}
-	return Device{ID: emulator.serial, Release: release}, nil
+	return Device{ID: emulator.serial, Release: release, HintEnv: emulatorSerialEnv, HintValue: emulator.serial}, nil
 }
 
 func (a androidDevices) resolveSystemImage(sdkManagerPath string) (string, error) {

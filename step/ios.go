@@ -61,7 +61,7 @@ func (i iosDevices) acquire() (Device, error) {
 		if err := i.simulatorManager.WaitForBootFinished(udid, iosBootTimeout); err != nil {
 			return Device{}, err
 		}
-		return Device{ID: udid, Release: func() {}}, nil
+		return Device{ID: udid}, nil
 	}
 
 	i.logger.Printf("No running simulator, booting %s", defaultSimulatorDestination)
@@ -83,7 +83,7 @@ func (i iosDevices) useDestination(dest string) (Device, error) {
 		if err := i.simulatorManager.WaitForBootFinished(device.UDID, iosBootTimeout); err != nil {
 			return Device{}, err
 		}
-		return Device{ID: device.UDID, Release: func() {}}, nil
+		return Device{ID: device.UDID}, nil
 	}
 
 	start := time.Now()
@@ -102,7 +102,12 @@ func (i iosDevices) useDestination(dest string) (Device, error) {
 		return Device{}, err
 	}
 	i.logger.Donef("Simulator booted in %s", time.Since(start).Round(time.Second))
-	return Device{ID: device.UDID, Release: release}, nil
+	return Device{
+		ID:        device.UDID,
+		Release:   release,
+		HintEnv:   xcodeDestinationEnv,
+		HintValue: fmt.Sprintf("platform=%s,name=%s,OS=%s", device.Platform, device.Name, device.OS),
+	}, nil
 }
 
 // runningSimulators counts Booting simulators as running too, so the step never boots a second one next to them.

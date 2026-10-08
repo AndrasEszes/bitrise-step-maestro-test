@@ -58,33 +58,73 @@ func TestRun_RunsOnTheAcquiredDeviceAndReleasesIt(t *testing.T) {
 	writeFile(t, fakeMaestro, "#!/bin/sh\necho \"$@\" > \""+argsFile+"\"\nexit 1\n")
 	require.NoError(t, os.Chmod(fakeMaestro, 0755))
 
-	devices := &fakeDevices{device: Device{ID: "emulator-5554"}}
+	devices := &fakeDevices{device: bootedDevice()}
+	exporter := &recordingExporter{}
 	s := testStep()
 	s.commandFactory = command.NewFactory(env.NewRepository())
 	s.devices = devices
+	s.exporter = exporter
 
-	_, err := s.Run(Config{FlowPaths: []string{".maestro"}, ManageDevice: true}, Installation{BinaryPath: fakeMaestro})
+	_, err := s.Run(Config{FlowPaths: []string{".maestro"}, ManageDevice: true, ShutdownDevice: true}, Installation{BinaryPath: fakeMaestro})
 	require.ErrorContains(t, err, "maestro test failed")
 
 	maestroArgs, err := os.ReadFile(argsFile)
 	require.NoError(t, err)
 	assert.Contains(t, string(maestroArgs), "--device emulator-5554")
 	assert.True(t, devices.released, "the device is released even when the flows fail")
+	assert.Empty(t, exporter.outputs)
+}
+
+func TestRun_LeavesTheBootedDeviceRunning(t *testing.T) {
+	devices := &fakeDevices{device: bootedDevice()}
+	exporter := &recordingExporter{}
+	s := testStep()
+	s.commandFactory = command.NewFactory(env.NewRepository())
+	s.devices = devices
+	s.exporter = exporter
+
+	_, err := s.Run(Config{FlowPaths: []string{".maestro"}, ManageDevice: true}, Installation{BinaryPath: fakeMaestroBinary(t)})
+	require.NoError(t, err)
+	assert.False(t, devices.released)
+	assert.Equal(t, map[string]string{emulatorSerialEnv: "emulator-5554"}, exporter.outputs, "a later step finds the device by the exported serial")
+}
+
+func TestRun_LeavesARunningDeviceAlone(t *testing.T) {
+	for _, shutdown := range []bool{true, false} {
+		devices := &fakeDevices{device: Device{ID: "emulator-5554"}}
+		exporter := &recordingExporter{}
+		s := testStep()
+		s.commandFactory = command.NewFactory(env.NewRepository())
+		s.devices = devices
+		s.exporter = exporter
+
+		_, err := s.Run(Config{FlowPaths: []string{".maestro"}, ManageDevice: true, ShutdownDevice: shutdown}, Installation{BinaryPath: fakeMaestroBinary(t)})
+		require.NoError(t, err)
+		assert.False(t, devices.released)
+		assert.Empty(t, exporter.outputs)
+	}
 }
 
 func TestRun_DeviceNotManaged(t *testing.T) {
-	fakeMaestro := filepath.Join(t.TempDir(), "maestro")
-	writeFile(t, fakeMaestro, "#!/bin/sh\n")
-	require.NoError(t, os.Chmod(fakeMaestro, 0755))
-
 	devices := &fakeDevices{}
 	s := testStep()
 	s.commandFactory = command.NewFactory(env.NewRepository())
 	s.devices = devices
 
-	_, err := s.Run(Config{FlowPaths: []string{".maestro"}}, Installation{BinaryPath: fakeMaestro})
+	_, err := s.Run(Config{FlowPaths: []string{".maestro"}}, Installation{BinaryPath: fakeMaestroBinary(t)})
 	require.NoError(t, err)
 	assert.False(t, devices.acquired)
+}
+
+func fakeMaestroBinary(t *testing.T) string {
+	pth := filepath.Join(t.TempDir(), "maestro")
+	writeFile(t, pth, "#!/bin/sh\n")
+	require.NoError(t, os.Chmod(pth, 0755))
+	return pth
+}
+
+func bootedDevice() Device {
+	return Device{ID: "emulator-5554", HintEnv: emulatorSerialEnv, HintValue: "emulator-5554"}
 }
 
 type fakeDevices struct {
@@ -93,9 +133,25 @@ type fakeDevices struct {
 	released bool
 }
 
+// Acquire hands out a Release only for a device with a hint, as the real managers do for the devices they boot.
 func (f *fakeDevices) Acquire(Config) (Device, error) {
 	f.acquired = true
 	device := f.device
-	device.Release = func() { f.released = true }
+	if device.HintEnv != "" {
+		device.Release = func() { f.released = true }
+	}
 	return device, nil
+}
+
+type recordingExporter struct {
+	fakeExporter
+	outputs map[string]string
+}
+
+func (r *recordingExporter) ExportOutput(key, value string) error {
+	if r.outputs == nil {
+		r.outputs = map[string]string{}
+	}
+	r.outputs[key] = value
+	return nil
 }

@@ -87,6 +87,58 @@ workflows:
     - _verify_outputs
     - _verify_android_device_shut_down
 
+  test_android_steps_share_device:
+    steps:
+    - bitrise-run@0:
+        run_if: |-
+          {{ or (envcontain "BITRISEIO_STACK_ID" "ubuntu") (not .IsCI) }}
+        inputs:
+        - workflow_id: utility_test_android_steps_share_device
+        - bitrise_config_path: ./e2e/bitrise.yml
+
+  utility_test_android_steps_share_device:
+    envs:
+    - TEST_NAME: Maestro Android shared device
+    - BITRISE_EMULATOR_SERIAL: ""
+    before_run:
+    - _download_samples
+    - _shut_down_android_devices
+    steps:
+    - path::./:
+        title: Execute step, leave the device running
+        inputs:
+        - app_path: $SAMPLES_DIR/wikipedia.apk
+        - flow_path: $SAMPLES_DIR/android-flow.yaml
+        - test_name: $TEST_NAME first
+        - shutdown_device: "no"
+    - script@1:
+        title: Verify the emulator is left running and exported
+        inputs:
+        - content: |-
+            #!/usr/bin/env bash
+            set -euxo pipefail
+            test -n "$BITRISE_EMULATOR_SERIAL"
+            adb devices | grep -q "^$BITRISE_EMULATOR_SERIAL[[:space:]]"
+            envman add --key FIRST_EMULATOR_SERIAL --value "$BITRISE_EMULATOR_SERIAL"
+    - path::./:
+        title: Execute step on the same device
+        inputs:
+        - app_path: $SAMPLES_DIR/wikipedia.apk
+        - flow_path: $SAMPLES_DIR/android-flow.yaml
+        - test_name: $TEST_NAME
+    - script@1:
+        title: Verify the second step ran on the same emulator
+        is_always_run: true
+        inputs:
+        - content: |-
+            #!/usr/bin/env bash
+            set -euxo pipefail
+            test "$(adb devices | tail -n +2 | grep -c .)" = 1
+            adb devices | grep -q "^$FIRST_EMULATOR_SERIAL[[:space:]]"
+    after_run:
+    - _verify_outputs
+    - _verify_android_device_kept
+
   test_android_failing_flow_exports_results:
     steps:
     - bitrise-run@0:
@@ -203,6 +255,63 @@ workflows:
     after_run:
     - _verify_outputs
     - _verify_ios_device_shut_down
+
+  test_ios_steps_share_device:
+    steps:
+    - bitrise-run@0:
+        run_if: |-
+          {{ or (envcontain "BITRISEIO_STACK_ID" "osx") (not .IsCI) }}
+        inputs:
+        - workflow_id: utility_test_ios_steps_share_device
+        - bitrise_config_path: ./e2e/bitrise.yml
+
+  utility_test_ios_steps_share_device:
+    envs:
+    - TEST_NAME: Maestro iOS shared device
+    - BITRISE_XCODE_DESTINATION: ""
+    before_run:
+    - _download_samples
+    - _shut_down_ios_devices
+    steps:
+    - script@1:
+        title: Unzip sample app
+        inputs:
+        - content: |-
+            #!/usr/bin/env bash
+            set -euxo pipefail
+            unzip -q "$SAMPLES_DIR/wikipedia.zip" -d "$SAMPLES_DIR"
+    - path::./:
+        title: Execute step, leave the device running
+        inputs:
+        - app_path: $SAMPLES_DIR/Wikipedia.app
+        - flow_path: $SAMPLES_DIR/ios-flow.yaml
+        - test_name: $TEST_NAME first
+        - shutdown_device: "no"
+    - script@1:
+        title: Verify the simulator is left running and exported
+        inputs:
+        - content: |-
+            #!/usr/bin/env bash
+            set -euxo pipefail
+            test -n "$BITRISE_XCODE_DESTINATION"
+            test "$(xcrun simctl list devices booted | grep -c '(Booted)')" = 1
+    - path::./:
+        title: Execute step on the same device
+        inputs:
+        - app_path: $SAMPLES_DIR/Wikipedia.app
+        - flow_path: $SAMPLES_DIR/ios-flow.yaml
+        - test_name: $TEST_NAME
+    - script@1:
+        title: Verify the second step ran on the same simulator
+        is_always_run: true
+        inputs:
+        - content: |-
+            #!/usr/bin/env bash
+            set -euxo pipefail
+            test "$(xcrun simctl list devices booted | grep -c '(Booted)')" = 1
+    after_run:
+    - _verify_outputs
+    - _verify_ios_device_kept
 
   _download_samples:
     steps:

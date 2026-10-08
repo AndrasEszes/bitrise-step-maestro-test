@@ -15,10 +15,13 @@ const (
 	xcodeDestinationEnv = "BITRISE_XCODE_DESTINATION"
 )
 
-// Device is the device the flows run on. Release shuts it down when the step booted it, and is a no-op otherwise.
+// Device is the device the flows run on. Release is set only when the step booted the device: it shuts the device
+// down. HintEnv and HintValue let a later step find a booted device the step leaves running.
 type Device struct {
-	ID      string
-	Release func()
+	ID        string
+	Release   func()
+	HintEnv   string
+	HintValue string
 }
 
 type DeviceManager interface {
